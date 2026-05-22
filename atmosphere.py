@@ -201,15 +201,15 @@ def altitude_from_pressure(P_query, delta_isa=0.0):
         raise ValueError(f"Pression hors domaine : P = {P_query:.2f} Pa (domaine : ]0, {P0:.0f}] Pa)")
 
     # Températures de référence avec déviation ISA
-    T_sl     = T0 + delta_isa
-    T_strato = T11 + delta_isa
+    #T_sl     = T0 + delta_isa
+    T_strato = T11 #+ delta_isa
 
     # Pression à la tropopause : sert de seuil pour choisir la couche
-    P11_dev = P0 * (T_strato / T_sl) ** _EXP
+    P11_dev = P0 * (T_strato / T0) ** _EXP
 
     if P_query >= P11_dev:
         # --- Inversion troposphère : formule barométrique ---
-        h = T_sl * ((P_query / P0) ** (1.0 / _EXP) - 1.0) / L
+        h = T0 * ((P_query / P0) ** (1.0 / _EXP) - 1.0) / L
     else:
         # --- Inversion stratosphère : log de la loi isotherme ---
         h = H_TROPO - (R * T_strato / G) * np.log(P_query / P11_dev)
