@@ -74,7 +74,7 @@ def temperature(h, delta_isa=0.0):
     return np.where(h <= H_TROPO, T_tropo, T_strato)
 
 
-def pressure(h):
+def pressure(h, delta_isa=0.0):
     """
     Pression atmosphérique P(h, ΔISA).
 
