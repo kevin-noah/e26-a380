@@ -74,7 +74,7 @@ def temperature(h, delta_isa=0.0):
     return np.where(h <= H_TROPO, T_tropo, T_strato)
 
 
-def pressure(h, delta_isa=0.0):
+def pressure(h):
     """
     Pression atmosphérique P(h, ΔISA).
 
@@ -93,16 +93,16 @@ def pressure(h, delta_isa=0.0):
     h = np.asarray(h, dtype=float)
 
     # Températures de référence avec déviation ISA appliquée
-    T_sl     = T0 + delta_isa   # température au sol (base du calcul barométrique)
-    T_strato = T11 + delta_isa  # température isotherme en stratosphère
+    # T_sl     = T0 + delta_isa   # température au sol (base du calcul barométrique)
+    T_strato = T11 #+ delta_isa  # température isotherme en stratosphère
 
     # --- Troposphère : formule barométrique à gradient constant ---
     # Découle de l'intégration de dP/P = -g/(R·T) dh avec T = T_sl + L·h
-    T_tropo = T_sl + L * h
-    P_tropo = P0 * (T_tropo / T_sl) ** _EXP
+    T_tropo = T0 + L * h
+    P_tropo = P0 * (T_tropo / T0) ** _EXP
 
     # --- Pression à la tropopause (sert de référence pour la strato) ---
-    P11_dev = P0 * (T_strato / T_sl) ** _EXP
+    P11_dev = P0 * (T_strato / T0) ** _EXP
 
     # --- Stratosphère ---
     # T = constante → P(h) = P11 · exp(−g·(h−11000) / (R·T_strato))
