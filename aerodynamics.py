@@ -160,6 +160,38 @@ def get_cm_wb(model, alpha, mach):
     return _interp(model['f_cmwb'], alpha, mach)
 
 
+# ---------------------------------------------------------------------------
+# Downwash — angle de déviation de l'écoulement de l'aile vers l'empennage
+# ---------------------------------------------------------------------------
+
+# Coefficients du modèle linéaire : ε = ε0 + εα × α  [deg]
+_EPS0      = 1.18   # downwash à incidence nulle [deg]
+_EPS_ALPHA = 0.37   # gradient de downwash       [deg/deg]
+
+
+def f_downwash(alpha, eps0=_EPS0, eps_alpha=_EPS_ALPHA):
+    """
+    Calcule l'angle de downwash ε à l'empennage arrière.
+
+    Modèle linéaire :  ε = ε0 + εα × α
+
+    Paramètres
+    ----------
+    alpha : float ou array-like
+        Angle d'attaque de l'aile [deg]
+    eps0 : float
+        Downwash à incidence nulle [deg]  (défaut : 1.18)
+    eps_alpha : float
+        Gradient de downwash [deg/deg]   (défaut : 0.37)
+
+    Retourne
+    --------
+    float ou ndarray — angle de downwash ε [deg]
+    """
+    alpha = np.asarray(alpha, dtype=float)
+    return eps0 + eps_alpha * alpha
+
+
 def get_cl_ht(model, alpha, mach):
     """CL de l'empennage arrière pour alpha [deg] et Mach."""
     return _interp(model['f_clht'], alpha, mach)
@@ -192,7 +224,7 @@ def plot_aero_model(model):
     fig1.suptitle('Coefficients aérodynamiques — A380', fontsize=13)
 
     def _plot2d(ax, grid, ylabel):
-        ax.plot(grid['x_alpha'], grid['value'].T, linewidth=0.9)
+        ax.plot(grid['x_alpha'], grid['value'], linewidth=0.9)
         ax.set_xlabel(r'$\alpha$ [deg]')
         ax.set_ylabel(ylabel)
         ax.grid(True)

@@ -339,6 +339,8 @@ def print_aero_menu():
     print("  cd_ht --alpha <deg> --mach <M>   CD empennage")
     print("  all   --alpha <deg> --mach <M>   Tous les coefficients")
     print()
+    print("  downwash --alpha <deg>           Angle de downwash ε [deg]")
+    print()
     print("  plot              Graphiques 2D et 3D des coefficients")
     print("  geom [--file <fichier.vspgeom>]  Géométrie 3D OpenVSP")
     print("  info              Plages α et Mach du modèle chargé")
@@ -362,6 +364,9 @@ def _build_aero_parser():
         p = sub.add_parser(cmd)
         p.add_argument("--alpha", type=float, required=True)
         p.add_argument("--mach",  type=float, required=True)
+
+    p = sub.add_parser("downwash")
+    p.add_argument("--alpha", type=float, required=True)
 
     sub.add_parser("plot")
     sub.add_parser("info")
@@ -457,6 +462,17 @@ def loop_aero():
                     label, fn = fn_map[args.cmd]
                     _print_aero_result(label, fn(_model[0], args.alpha, args.mach),
                                        args.alpha, args.mach)
+
+            elif args.cmd == "downwash":
+                eps = mod_aero.f_downwash(args.alpha)
+                print()
+                print("=" * 46)
+                print(f"  α = {args.alpha:.2f} °")
+                print("─" * 46)
+                print(f"  ε  = ε0 + εα·α = {mod_aero._EPS0} + {mod_aero._EPS_ALPHA}×{args.alpha:.2f}")
+                print(f"  ε  =  {eps:>10.4f}  deg")
+                print("=" * 46)
+                print()
 
             elif args.cmd == "plot":
                 if _model[0] is None:
