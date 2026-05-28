@@ -8,6 +8,7 @@ Usage :
 """
 
 import argparse
+import os
 import shlex   # découpage d'une chaîne en tokens comme le ferait un shell
 import sys
 import numpy as np
@@ -25,7 +26,7 @@ import trim          as mod_trim
 MODULES = [
     {"id": 1, "cle": "atm",  "module": mod_atm,  "dispo": True},
     {"id": 2, "cle": "conv", "module": mod_conv,  "dispo": True},
-    {"id": 3, "cle": "aero", "module": mod_aero,  "dispo": False},
+    {"id": 3, "cle": "aero", "module": mod_aero,  "dispo": True},
     {"id": 4, "cle": "prop", "module": mod_prop,  "dispo": False},
     {"id": 5, "cle": "trim", "module": mod_trim,  "dispo": False},
 ]
@@ -321,6 +322,177 @@ def loop_conv():
             pass
 
 
+# ============================== MODULE AÉRODYNAMIQUE ==========================
+
+def print_aero_menu():
+    print()
+    print("─" * 62)
+    print(f"  {mod_aero.NOM}")
+    print("─" * 62)
+    print("  load  [--wb <fichier>] [--ht <fichier>]")
+    print("        Charge le modèle (fichiers par défaut si omis)")
+    print()
+    print("  cl    --alpha <deg> --mach <M>   CL aile + fuselage")
+    print("  cd    --alpha <deg> --mach <M>   CD aile + fuselage")
+    print("  cm    --alpha <deg> --mach <M>   Cm aile + fuselage")
+    print("  cl_ht --alpha <deg> --mach <M>   CL empennage")
+    print("  cd_ht --alpha <deg> --mach <M>   CD empennage")
+    print("  all   --alpha <deg> --mach <M>   Tous les coefficients")
+    print()
+    print("  plot              Graphiques 2D et 3D des coefficients")
+    print("  geom [--file <fichier.vspgeom>]  Géométrie 3D OpenVSP")
+    print("  info              Plages α et Mach du modèle chargé")
+    print()
+    print("  help  Afficher cette aide")
+    print("  back  Retour au menu principal")
+    print("─" * 62)
+    print()
+
+
+def _build_aero_parser():
+    parser = _SilentParser(prog="")
+    sub    = parser.add_subparsers(dest="cmd")
+    sub.required = True
+
+    p = sub.add_parser("load")
+    p.add_argument("--wb",   type=str, default=None)
+    p.add_argument("--ht",   type=str, default=None)
+
+    for cmd in ("cl", "cd", "cm", "cl_ht", "cd_ht", "all"):
+        p = sub.add_parser(cmd)
+        p.add_argument("--alpha", type=float, required=True)
+        p.add_argument("--mach",  type=float, required=True)
+
+    sub.add_parser("plot")
+    sub.add_parser("info")
+
+    p = sub.add_parser("geom")
+    p.add_argument("--file", type=str, default=None)
+
+    return parser
+
+
+def _print_aero_result(label, value, alpha, mach):
+    print()
+    print("=" * 46)
+    print(f"  α = {alpha:.2f} °    Mach = {mach:.4f}")
+    print("─" * 46)
+    print(f"  {label:<10} = {value:>14.8f}")
+    print("=" * 46)
+    print()
+
+
+def _print_aero_all(model, alpha, mach):
+    cl_wb = mod_aero.get_cl_wb(model, alpha, mach)
+    cd_wb = mod_aero.get_cd_wb(model, alpha, mach)
+    cm_wb = mod_aero.get_cm_wb(model, alpha, mach)
+    cl_ht = mod_aero.get_cl_ht(model, alpha, mach)
+    cd_ht = mod_aero.get_cd_ht(model, alpha, mach)
+    print()
+    print("=" * 46)
+    print(f"  α = {alpha:.2f} °    Mach = {mach:.4f}")
+    print("─" * 46)
+    print(f"  {'CL_wb':<10} = {cl_wb:>14.8f}")
+    print(f"  {'CD_wb':<10} = {cd_wb:>14.8f}")
+    print(f"  {'Cm_wb':<10} = {cm_wb:>14.8f}")
+    print(f"  {'CL_ht':<10} = {cl_ht:>14.8f}")
+    print(f"  {'CD_ht':<10} = {cd_ht:>14.8f}")
+    print("=" * 46)
+    print()
+
+
+def loop_aero():
+    """Boucle interactive du module aérodynamique."""
+    print_aero_menu()
+    parser  = _build_aero_parser()
+    _model  = [None]   # conteneur mutable pour conserver le modèle entre les commandes
+
+    while True:
+        try:
+            ligne = input("  AERO> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+
+        if not ligne:
+            continue
+        if ligne.lower() in ("back", "menu", "b"):
+            break
+        if ligne.lower() in ("help", "aide", "?"):
+            print_aero_menu()
+            continue
+
+        try:
+            args = parser.parse_args(shlex.split(ligne))
+
+            if args.cmd == "load":
+                wb = os.path.expanduser(args.wb) if args.wb else mod_aero.DEFAULT_FILE_WB
+                ht = os.path.expanduser(args.ht) if args.ht else mod_aero.DEFAULT_FILE_HT
+                print(f"  Chargement de {os.path.basename(wb)} et {os.path.basename(ht)} ...")
+                _model[0] = mod_aero.build_aero_model(wb, ht)
+                m = _model[0]
+                print(f"  Modèle chargé.")
+                print(f"    α : {m['f_clwb']['x_alpha'][0]:.1f}° → "
+                      f"{m['f_clwb']['x_alpha'][-1]:.1f}°  "
+                      f"({len(m['f_clwb']['x_alpha'])} points)")
+                print(f"    M : {m['f_clwb']['y_mach'][0]:.3f} → "
+                      f"{m['f_clwb']['y_mach'][-1]:.3f}  "
+                      f"({len(m['f_clwb']['y_mach'])} points)")
+                print()
+
+            elif args.cmd in ("cl", "cd", "cm", "cl_ht", "cd_ht", "all"):
+                if _model[0] is None:
+                    print("  Aucun modèle chargé — tapez 'load' d'abord.\n")
+                    continue
+                fn_map = {
+                    "cl":    ("CL_wb",  mod_aero.get_cl_wb),
+                    "cd":    ("CD_wb",  mod_aero.get_cd_wb),
+                    "cm":    ("Cm_wb",  mod_aero.get_cm_wb),
+                    "cl_ht": ("CL_ht",  mod_aero.get_cl_ht),
+                    "cd_ht": ("CD_ht",  mod_aero.get_cd_ht),
+                }
+                if args.cmd == "all":
+                    _print_aero_all(_model[0], args.alpha, args.mach)
+                else:
+                    label, fn = fn_map[args.cmd]
+                    _print_aero_result(label, fn(_model[0], args.alpha, args.mach),
+                                       args.alpha, args.mach)
+
+            elif args.cmd == "plot":
+                if _model[0] is None:
+                    print("  Aucun modèle chargé — tapez 'load' d'abord.\n")
+                    continue
+                print("  Affichage des graphiques (fermer la fenêtre pour continuer)...")
+                mod_aero.plot_aero_model(_model[0])
+
+            elif args.cmd == "geom":
+                fname = os.path.expanduser(args.file) if args.file else mod_aero.DEFAULT_FILE_GEOM
+                print("  Affichage de la géométrie (fermer la fenêtre pour continuer)...")
+                mod_aero.show_geometry(fname)
+
+            elif args.cmd == "info":
+                if _model[0] is None:
+                    print("  Aucun modèle chargé — tapez 'load' d'abord.\n")
+                    continue
+                m = _model[0]
+                print()
+                print("=" * 46)
+                print("  Modèle aérodynamique chargé")
+                print("─" * 46)
+                for key in ("f_clwb", "f_cdwb", "f_cmwb", "f_clht", "f_cdht"):
+                    g = m[key]
+                    print(f"  {key:<8}  α [{g['x_alpha'][0]:+.1f}°, {g['x_alpha'][-1]:+.1f}°]"
+                          f"  M [{g['y_mach'][0]:.3f}, {g['y_mach'][-1]:.3f}]"
+                          f"  ({g['value'].shape[0]}×{g['value'].shape[1]})")
+                print("=" * 46)
+                print()
+
+        except (ValueError, FileNotFoundError) as e:
+            print(f"  Erreur : {e}\n")
+        except SystemExit:
+            pass
+
+
 # ============================== MODULES EN DÉVELOPPEMENT ======================
 
 def loop_dev(module):
@@ -338,7 +510,7 @@ def loop_dev(module):
 _LOOPS = {
     "atm":  loop_atm,
     "conv": loop_conv,
-    "aero": lambda: loop_dev(mod_aero),
+    "aero": loop_aero,
     "prop": lambda: loop_dev(mod_prop),
     "trim": lambda: loop_dev(mod_trim),
 }
