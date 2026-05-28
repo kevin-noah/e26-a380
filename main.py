@@ -22,7 +22,7 @@ import trim          as mod_trim
 # ---------------------------------------------------------------------------
 # Registre des modules — chaque entrée porte son module et son statut
 # ---------------------------------------------------------------------------
-
+# registre des modules
 MODULES = [
     {"id": 1, "cle": "atm",  "module": mod_atm,  "dispo": True},
     {"id": 2, "cle": "conv", "module": mod_conv,  "dispo": True},
