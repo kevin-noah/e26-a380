@@ -332,9 +332,9 @@ def print_aero_menu():
     print("  load  [--wb <fichier>] [--ht <fichier>]")
     print("        Charge le modèle (fichiers par défaut si omis)")
     print()
-    print("  cl    --alpha <deg> --mach <M>   CL aile + fuselage")
-    print("  cd    --alpha <deg> --mach <M>   CD aile + fuselage")
-    print("  cm    --alpha <deg> --mach <M>   Cm aile + fuselage")
+    print("  clwb  --alpha <deg> --mach <M>   CL aile + fuselage")
+    print("  cdwb  --alpha <deg> --mach <M>   CD aile + fuselage")
+    print("  cmwb  --alpha <deg> --mach <M>   Cm aile + fuselage")
     print("  cl_ht --alpha <deg> --mach <M>   CL empennage")
     print("  cd_ht --alpha <deg> --mach <M>   CD empennage")
     print("  all   --alpha <deg> --mach <M>   Tous les coefficients")
@@ -360,7 +360,7 @@ def _build_aero_parser():
     p.add_argument("--wb",   type=str, default=None)
     p.add_argument("--ht",   type=str, default=None)
 
-    for cmd in ("cl", "cd", "cm", "cl_ht", "cd_ht", "all"):
+    for cmd in ("clwb", "cdwb", "cmwb", "cl_ht", "cd_ht", "all"):
         p = sub.add_parser(cmd)
         p.add_argument("--alpha", type=float, required=True)
         p.add_argument("--mach",  type=float, required=True)
@@ -445,14 +445,14 @@ def loop_aero():
                       f"({len(m['f_clwb']['y_mach'])} points)")
                 print()
 
-            elif args.cmd in ("cl", "cd", "cm", "cl_ht", "cd_ht", "all"):
+            elif args.cmd in ("clwb", "cdwb", "cmwb", "cl_ht", "cd_ht", "all"):
                 if _model[0] is None:
                     print("  Aucun modèle chargé — tapez 'load' d'abord.\n")
                     continue
                 fn_map = {
-                    "cl":    ("CL_wb",  mod_aero.get_cl_wb),
-                    "cd":    ("CD_wb",  mod_aero.get_cd_wb),
-                    "cm":    ("Cm_wb",  mod_aero.get_cm_wb),
+                    "clwb":  ("CL_wb",  mod_aero.get_cl_wb),
+                    "cdwb":  ("CD_wb",  mod_aero.get_cd_wb),
+                    "cmwb":  ("Cm_wb",  mod_aero.get_cm_wb),
                     "cl_ht": ("CL_ht",  mod_aero.get_cl_ht),
                     "cd_ht": ("CD_ht",  mod_aero.get_cd_ht),
                 }
