@@ -194,14 +194,16 @@ def f_downwash(alpha, eps0=_EPS0, eps_alpha=_EPS_ALPHA, delta_it=0.0):
     return eps0 + eps_alpha * alpha - delta_it
 
 
-def get_cl_ht(model, alpha, mach):
+def get_cl_ht(model, alpha, mach, delta_it=0.0):
     """CL de l'empennage arrière pour alpha [deg] et Mach."""
-    return _interp(model['f_clht'], alpha, mach)
+    alpha_ht = alpha - f_downwash(alpha, delta_it=delta_it)
+    return _interp(model['f_clht'], alpha_ht, mach)
 
 
-def get_cd_ht(model, alpha, mach):
+def get_cd_ht(model, alpha, mach, delta_it=0.0):
     """CD total de l'empennage arrière pour alpha [deg] et Mach."""
-    return _interp(model['f_cdht'], alpha, mach)
+    alpha_ht = alpha - f_downwash(alpha, delta_it=delta_it)
+    return _interp(model['f_cdht'], alpha_ht, mach)
 
 
 # ---------------------------------------------------------------------------
