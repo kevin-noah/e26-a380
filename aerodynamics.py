@@ -311,6 +311,73 @@ def plot_aero_model(model):
     plt.show()
 
 
+def plot_total(model, delta_it=0.0):
+    """
+    Affiche les courbes 2D et surfaces 3D des coefficients totaux CL_t, CD_t, CM_t.
+
+    Figure 1 : CL_t, CD_t, CM_t vs alpha (une courbe par Mach).
+    Figure 2 : mêmes données en surfaces 3D f(alpha, Mach).
+
+    Paramètres
+    ----------
+    model    : dict  retourné par build_aero_model()
+    delta_it : float  calage de l'empennage [deg] (défaut : 0.0)
+    """
+    import matplotlib.pyplot as plt
+
+    ref    = model['f_clwb']
+    alphas = ref['x_alpha']
+    machs  = ref['y_mach']
+
+    # Calcul des grilles totales  [n_alpha × n_mach]
+    cl_t = np.array([[get_cl_total(model, a, M, delta_it=delta_it)
+                      for M in machs] for a in alphas])
+    cd_t = np.array([[get_cd_total(model, a, M, delta_it=delta_it)
+                      for M in machs] for a in alphas])
+    cm_t = np.array([[get_cm_total(model, a, M, delta_it=delta_it)
+                      for M in machs] for a in alphas])
+
+    title_suffix = f"  (δit = {delta_it:.1f}°)" if delta_it != 0.0 else ""
+
+    # ── Figure 1 : courbes 2D ─────────────────────────────────────────────
+    fig1, axes = plt.subplots(1, 3, figsize=(14, 5))
+    fig1.suptitle(f'Coefficients totaux — A380{title_suffix}', fontsize=13)
+
+    def _plot2d(ax, data, ylabel):
+        ax.plot(alphas, data, linewidth=0.9)
+        ax.set_xlabel(r'$\alpha$ [deg]')
+        ax.set_ylabel(ylabel)
+        ax.legend([f'M={M:.3f}' for M in machs], fontsize=7, loc='best')
+        ax.grid(True)
+
+    _plot2d(axes[0], cl_t, r'$C_{L_t}$')
+    _plot2d(axes[1], cd_t, r'$C_{D_t}$')
+    _plot2d(axes[2], cm_t, r'$C_{M_t}$')
+    plt.tight_layout()
+
+    # ── Figure 2 : surfaces 3D ────────────────────────────────────────────
+    fig2, axes3 = plt.subplots(1, 3, figsize=(16, 6),
+                                subplot_kw={'projection': '3d'})
+    fig2.suptitle(f'Surfaces totales — A380{title_suffix}', fontsize=13)
+
+    A, M_grid = np.meshgrid(alphas, machs)
+
+    def _plot3d(ax, data, zlabel):
+        ax.plot_surface(A, M_grid, data.T,
+                        cmap='viridis', edgecolor='none', alpha=0.85)
+        ax.view_init(elev=20, azim=45)
+        ax.set_xlabel(r'$\alpha$ [deg]')
+        ax.set_ylabel('Mach')
+        ax.set_zlabel(zlabel)
+
+    _plot3d(axes3[0], cl_t, r'$C_{L_t}$')
+    _plot3d(axes3[1], cd_t, r'$C_{D_t}$')
+    _plot3d(axes3[2], cm_t, r'$C_{M_t}$')
+    plt.tight_layout()
+
+    plt.show()
+
+
 # ---------------------------------------------------------------------------
 # Visualisation 3D de la géométrie OpenVSP (.vspgeom)
 # ---------------------------------------------------------------------------

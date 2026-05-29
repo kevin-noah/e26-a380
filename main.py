@@ -344,7 +344,8 @@ def print_aero_menu():
     print()
     print("  downwash --alpha <deg> [--delta-it <deg>]   Angle de downwash ε [deg]")
     print()
-    print("  plot              Graphiques 2D et 3D des coefficients")
+    print("  plot              Graphiques 2D et 3D des coefficients WB et HT")
+    print("  plot_total [--delta-it <d>]   Graphiques 2D et 3D de CL_t, CD_t, CM_t")
     print("  geom [--file <fichier.vspgeom>]  Géométrie 3D OpenVSP")
     print("  info              Plages α et Mach du modèle chargé")
     print()
@@ -382,6 +383,11 @@ def _build_aero_parser():
                    help="calage de l'empennage δit [deg] (défaut : 0)")
 
     sub.add_parser("plot")
+
+    p = sub.add_parser("plot_total")
+    p.add_argument("--delta-it", type=float, default=0.0,
+                   dest="delta_it", metavar="DEG")
+
     sub.add_parser("info")
 
     p = sub.add_parser("geom")
@@ -457,12 +463,18 @@ def loop_aero():
                 _model[0] = mod_aero.build_aero_model(wb, ht)
                 m = _model[0]
                 print(f"  Modèle chargé.")
-                print(f"    α : {m['f_clwb']['x_alpha'][0]:.1f}° → "
+                print(f"    WB  α : {m['f_clwb']['x_alpha'][0]:.1f}° → "
                       f"{m['f_clwb']['x_alpha'][-1]:.1f}°  "
                       f"({len(m['f_clwb']['x_alpha'])} points)")
-                print(f"    M : {m['f_clwb']['y_mach'][0]:.3f} → "
+                print(f"    WB  M : {m['f_clwb']['y_mach'][0]:.3f} → "
                       f"{m['f_clwb']['y_mach'][-1]:.3f}  "
                       f"({len(m['f_clwb']['y_mach'])} points)")
+                print(f"    HT  α : {m['f_clht']['x_alpha'][0]:.1f}° → "
+                      f"{m['f_clht']['x_alpha'][-1]:.1f}°  "
+                      f"({len(m['f_clht']['x_alpha'])} points)")
+                print(f"    HT  M : {m['f_clht']['y_mach'][0]:.3f} → "
+                      f"{m['f_clht']['y_mach'][-1]:.3f}  "
+                      f"({len(m['f_clht']['y_mach'])} points)")
                 print()
 
             elif args.cmd in ("clwb", "cdwb", "cmwb", "cl_ht", "cd_ht",
@@ -506,6 +518,13 @@ def loop_aero():
                     continue
                 print("  Affichage des graphiques (fermer la fenêtre pour continuer)...")
                 mod_aero.plot_aero_model(_model[0])
+
+            elif args.cmd == "plot_total":
+                if _model[0] is None:
+                    print("  Aucun modèle chargé — tapez 'load' d'abord.\n")
+                    continue
+                print("  Affichage des coefficients totaux (fermer la fenêtre pour continuer)...")
+                mod_aero.plot_total(_model[0], delta_it=args.delta_it)
 
             elif args.cmd == "geom":
                 fname = os.path.expanduser(args.file) if args.file else mod_aero.DEFAULT_FILE_GEOM
