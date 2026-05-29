@@ -207,6 +207,55 @@ def get_cd_ht(model, alpha, mach, delta_it=0.0):
 
 
 # ---------------------------------------------------------------------------
+# Géométrie de référence A380 (vraies dimensions)
+# ---------------------------------------------------------------------------
+
+_S_WB = 859.0   # surface de référence aile + fuselage   [m²]
+_C_WB = 11.0    # corde aérodynamique moyenne aile (MAC)  [m]
+_S_HT = 205.0   # surface de référence stabilisateur HT   [m²]
+_X_HT = 32.0    # bras de levier longitudinal HT          [m]
+_Z_HT = 1.24    # bras de levier vertical HT              [m]
+
+
+# ---------------------------------------------------------------------------
+# Coefficients totaux avion (Wing-Body + empennage HT)
+# ---------------------------------------------------------------------------
+
+def get_cl_total(model, alpha, mach, delta_it=0.0):
+    """
+    CL total de l'avion.
+
+    CL_t = CL_wb + (S_ht / S_wb) * CL_ht
+    """
+    cl_wb = _interp(model['f_clwb'], alpha, mach)
+    cl_ht = get_cl_ht(model, alpha, mach, delta_it=delta_it)
+    return cl_wb + (_S_HT / _S_WB) * cl_ht
+
+
+def get_cd_total(model, alpha, mach, delta_it=0.0):
+    """
+    CD total de l'avion.
+
+    CD_t = CD_wb + (S_ht / S_wb) * CD_ht
+    """
+    cd_wb = _interp(model['f_cdwb'], alpha, mach)
+    cd_ht = get_cd_ht(model, alpha, mach, delta_it=delta_it)
+    return cd_wb + (_S_HT / _S_WB) * cd_ht
+
+
+def get_cm_total(model, alpha, mach, delta_it=0.0):
+    """
+    CM total de l'avion par rapport au centre aérodynamique de l'aile.
+
+    CM_t = CM_wb + (S_ht / (S_wb * c_wb)) * (x_ht * CL_ht - z_ht * CD_ht)
+    """
+    cm_wb = _interp(model['f_cmwb'], alpha, mach)
+    cl_ht = get_cl_ht(model, alpha, mach, delta_it=delta_it)
+    cd_ht = get_cd_ht(model, alpha, mach, delta_it=delta_it)
+    return cm_wb + (_S_HT / (_S_WB * _C_WB)) * (_X_HT * cl_ht - _Z_HT * cd_ht)
+
+
+# ---------------------------------------------------------------------------
 # Visualisation 2D et 3D des coefficients aérodynamiques
 # ---------------------------------------------------------------------------
 

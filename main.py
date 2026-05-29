@@ -332,12 +332,15 @@ def print_aero_menu():
     print("  load  [--wb <fichier>] [--ht <fichier>]")
     print("        Charge le modèle (fichiers par défaut si omis)")
     print()
-    print("  clwb  --alpha <deg> --mach <M>   CL aile + fuselage")
-    print("  cdwb  --alpha <deg> --mach <M>   CD aile + fuselage")
-    print("  cmwb  --alpha <deg> --mach <M>   Cm aile + fuselage")
-    print("  cl_ht --alpha <deg> --mach <M>   CL empennage")
-    print("  cd_ht --alpha <deg> --mach <M>   CD empennage")
-    print("  all   --alpha <deg> --mach <M>   Tous les coefficients")
+    print("  clwb  --alpha <deg> --mach <M>                  CL aile + fuselage")
+    print("  cdwb  --alpha <deg> --mach <M>                  CD aile + fuselage")
+    print("  cmwb  --alpha <deg> --mach <M>                  Cm aile + fuselage")
+    print("  cl_ht --alpha <deg> --mach <M>                  CL empennage")
+    print("  cd_ht --alpha <deg> --mach <M>                  CD empennage")
+    print("  clt   --alpha <deg> --mach <M> [--delta-it <d>] CL total avion")
+    print("  cdt   --alpha <deg> --mach <M> [--delta-it <d>] CD total avion")
+    print("  cmt   --alpha <deg> --mach <M> [--delta-it <d>] CM total avion")
+    print("  all   --alpha <deg> --mach <M> [--delta-it <d>] Tous les coefficients")
     print()
     print("  downwash --alpha <deg> [--delta-it <deg>]   Angle de downwash ε [deg]")
     print()
@@ -360,10 +363,17 @@ def _build_aero_parser():
     p.add_argument("--wb",   type=str, default=None)
     p.add_argument("--ht",   type=str, default=None)
 
-    for cmd in ("clwb", "cdwb", "cmwb", "cl_ht", "cd_ht", "all"):
+    for cmd in ("clwb", "cdwb", "cmwb", "cl_ht", "cd_ht"):
         p = sub.add_parser(cmd)
         p.add_argument("--alpha", type=float, required=True)
         p.add_argument("--mach",  type=float, required=True)
+
+    for cmd in ("clt", "cdt", "cmt", "all"):
+        p = sub.add_parser(cmd)
+        p.add_argument("--alpha",    type=float, required=True)
+        p.add_argument("--mach",     type=float, required=True)
+        p.add_argument("--delta-it", type=float, default=0.0,
+                       dest="delta_it", metavar="DEG")
 
     p = sub.add_parser("downwash")
     p.add_argument("--alpha",    type=float, required=True)
@@ -390,21 +400,28 @@ def _print_aero_result(label, value, alpha, mach):
     print()
 
 
-def _print_aero_all(model, alpha, mach):
+def _print_aero_all(model, alpha, mach, delta_it=0.0):
     cl_wb = mod_aero.get_cl_wb(model, alpha, mach)
     cd_wb = mod_aero.get_cd_wb(model, alpha, mach)
     cm_wb = mod_aero.get_cm_wb(model, alpha, mach)
-    cl_ht = mod_aero.get_cl_ht(model, alpha, mach)
-    cd_ht = mod_aero.get_cd_ht(model, alpha, mach)
+    cl_ht = mod_aero.get_cl_ht(model, alpha, mach, delta_it=delta_it)
+    cd_ht = mod_aero.get_cd_ht(model, alpha, mach, delta_it=delta_it)
+    cl_t  = mod_aero.get_cl_total(model, alpha, mach, delta_it=delta_it)
+    cd_t  = mod_aero.get_cd_total(model, alpha, mach, delta_it=delta_it)
+    cm_t  = mod_aero.get_cm_total(model, alpha, mach, delta_it=delta_it)
     print()
     print("=" * 46)
-    print(f"  α = {alpha:.2f} °    Mach = {mach:.4f}")
+    print(f"  α = {alpha:.2f} °    Mach = {mach:.4f}    δit = {delta_it:.2f} °")
     print("─" * 46)
     print(f"  {'CL_wb':<10} = {cl_wb:>14.8f}")
     print(f"  {'CD_wb':<10} = {cd_wb:>14.8f}")
     print(f"  {'Cm_wb':<10} = {cm_wb:>14.8f}")
     print(f"  {'CL_ht':<10} = {cl_ht:>14.8f}")
     print(f"  {'CD_ht':<10} = {cd_ht:>14.8f}")
+    print("─" * 46)
+    print(f"  {'CL_t':<10} = {cl_t:>14.8f}")
+    print(f"  {'CD_t':<10} = {cd_t:>14.8f}")
+    print(f"  {'CM_t':<10} = {cm_t:>14.8f}")
     print("=" * 46)
     print()
 
@@ -448,19 +465,24 @@ def loop_aero():
                       f"({len(m['f_clwb']['y_mach'])} points)")
                 print()
 
-            elif args.cmd in ("clwb", "cdwb", "cmwb", "cl_ht", "cd_ht", "all"):
+            elif args.cmd in ("clwb", "cdwb", "cmwb", "cl_ht", "cd_ht",
+                              "clt", "cdt", "cmt", "all"):
                 if _model[0] is None:
                     print("  Aucun modèle chargé — tapez 'load' d'abord.\n")
                     continue
                 fn_map = {
-                    "clwb":  ("CL_wb",  mod_aero.get_cl_wb),
-                    "cdwb":  ("CD_wb",  mod_aero.get_cd_wb),
-                    "cmwb":  ("Cm_wb",  mod_aero.get_cm_wb),
-                    "cl_ht": ("CL_ht",  mod_aero.get_cl_ht),
-                    "cd_ht": ("CD_ht",  mod_aero.get_cd_ht),
+                    "clwb":  ("CL_wb",  lambda m, a, M: mod_aero.get_cl_wb(m, a, M)),
+                    "cdwb":  ("CD_wb",  lambda m, a, M: mod_aero.get_cd_wb(m, a, M)),
+                    "cmwb":  ("Cm_wb",  lambda m, a, M: mod_aero.get_cm_wb(m, a, M)),
+                    "cl_ht": ("CL_ht",  lambda m, a, M: mod_aero.get_cl_ht(m, a, M)),
+                    "cd_ht": ("CD_ht",  lambda m, a, M: mod_aero.get_cd_ht(m, a, M)),
+                    "clt":   ("CL_t",   lambda m, a, M: mod_aero.get_cl_total(m, a, M, delta_it=args.delta_it)),
+                    "cdt":   ("CD_t",   lambda m, a, M: mod_aero.get_cd_total(m, a, M, delta_it=args.delta_it)),
+                    "cmt":   ("CM_t",   lambda m, a, M: mod_aero.get_cm_total(m, a, M, delta_it=args.delta_it)),
                 }
                 if args.cmd == "all":
-                    _print_aero_all(_model[0], args.alpha, args.mach)
+                    _print_aero_all(_model[0], args.alpha, args.mach,
+                                    delta_it=args.delta_it)
                 else:
                     label, fn = fn_map[args.cmd]
                     _print_aero_result(label, fn(_model[0], args.alpha, args.mach),
