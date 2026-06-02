@@ -335,8 +335,9 @@ def print_aero_menu():
     print("  clwb  --alpha <deg> --mach <M>                  CL aile + fuselage")
     print("  cdwb  --alpha <deg> --mach <M>                  CD aile + fuselage")
     print("  cmwb  --alpha <deg> --mach <M>                  Cm aile + fuselage")
-    print("  cl_ht --alpha <deg> --mach <M>                  CL empennage")
-    print("  cd_ht --alpha <deg> --mach <M>                  CD empennage")
+    print("  cl_ht --alpha <deg> --mach <M> [--delta-it <d>] CL empennage")
+    print("  cd_ht --alpha <deg> --mach <M> [--delta-it <d>] CD empennage")
+    print("  cm_ht --alpha <deg> --mach <M> [--delta-it <d>] Cm empennage")
     print("  clt   --alpha <deg> --mach <M> [--delta-it <d>] CL total avion")
     print("  cdt   --alpha <deg> --mach <M> [--delta-it <d>] CD total avion")
     print("  cmt   --alpha <deg> --mach <M> [--delta-it <d>] CM total avion")
@@ -364,10 +365,17 @@ def _build_aero_parser():
     p.add_argument("--wb",   type=str, default=None)
     p.add_argument("--ht",   type=str, default=None)
 
-    for cmd in ("clwb", "cdwb", "cmwb", "cl_ht", "cd_ht"):
+    for cmd in ("clwb", "cdwb", "cmwb"):
         p = sub.add_parser(cmd)
         p.add_argument("--alpha", type=float, required=True)
         p.add_argument("--mach",  type=float, required=True)
+
+    for cmd in ("cl_ht", "cd_ht", "cm_ht"):
+        p = sub.add_parser(cmd)
+        p.add_argument("--alpha",    type=float, required=True)
+        p.add_argument("--mach",     type=float, required=True)
+        p.add_argument("--delta-it", type=float, default=0.0,
+                       dest="delta_it", metavar="DEG")
 
     for cmd in ("clt", "cdt", "cmt", "all"):
         p = sub.add_parser(cmd)
@@ -412,6 +420,7 @@ def _print_aero_all(model, alpha, mach, delta_it=0.0):
     cm_wb = mod_aero.get_cm_wb(model, alpha, mach)
     cl_ht = mod_aero.get_cl_ht(model, alpha, mach, delta_it=delta_it)
     cd_ht = mod_aero.get_cd_ht(model, alpha, mach, delta_it=delta_it)
+    cm_ht = mod_aero.get_cm_ht(model, alpha, mach, delta_it=delta_it)
     cl_t  = mod_aero.get_cl_total(model, alpha, mach, delta_it=delta_it)
     cd_t  = mod_aero.get_cd_total(model, alpha, mach, delta_it=delta_it)
     cm_t  = mod_aero.get_cm_total(model, alpha, mach, delta_it=delta_it)
@@ -424,6 +433,7 @@ def _print_aero_all(model, alpha, mach, delta_it=0.0):
     print(f"  {'Cm_wb':<10} = {cm_wb:>14.8f}")
     print(f"  {'CL_ht':<10} = {cl_ht:>14.8f}")
     print(f"  {'CD_ht':<10} = {cd_ht:>14.8f}")
+    print(f"  {'Cm_ht':<10} = {cm_ht:>14.8f}")
     print("─" * 46)
     print(f"  {'CL_t':<10} = {cl_t:>14.8f}")
     print(f"  {'CD_t':<10} = {cd_t:>14.8f}")
@@ -477,20 +487,22 @@ def loop_aero():
                       f"({len(m['f_clht']['y_mach'])} points)")
                 print()
 
-            elif args.cmd in ("clwb", "cdwb", "cmwb", "cl_ht", "cd_ht",
+            elif args.cmd in ("clwb", "cdwb", "cmwb", "cl_ht", "cd_ht", "cm_ht",
                               "clt", "cdt", "cmt", "all"):
                 if _model[0] is None:
                     print("  Aucun modèle chargé — tapez 'load' d'abord.\n")
                     continue
+                delta_it = getattr(args, 'delta_it', 0.0)
                 fn_map = {
                     "clwb":  ("CL_wb",  lambda m, a, M: mod_aero.get_cl_wb(m, a, M)),
                     "cdwb":  ("CD_wb",  lambda m, a, M: mod_aero.get_cd_wb(m, a, M)),
                     "cmwb":  ("Cm_wb",  lambda m, a, M: mod_aero.get_cm_wb(m, a, M)),
-                    "cl_ht": ("CL_ht",  lambda m, a, M: mod_aero.get_cl_ht(m, a, M)),
-                    "cd_ht": ("CD_ht",  lambda m, a, M: mod_aero.get_cd_ht(m, a, M)),
-                    "clt":   ("CL_t",   lambda m, a, M: mod_aero.get_cl_total(m, a, M, delta_it=args.delta_it)),
-                    "cdt":   ("CD_t",   lambda m, a, M: mod_aero.get_cd_total(m, a, M, delta_it=args.delta_it)),
-                    "cmt":   ("CM_t",   lambda m, a, M: mod_aero.get_cm_total(m, a, M, delta_it=args.delta_it)),
+                    "cl_ht": ("CL_ht",  lambda m, a, M: mod_aero.get_cl_ht(m, a, M, delta_it=delta_it)),
+                    "cd_ht": ("CD_ht",  lambda m, a, M: mod_aero.get_cd_ht(m, a, M, delta_it=delta_it)),
+                    "cm_ht": ("Cm_ht",  lambda m, a, M: mod_aero.get_cm_ht(m, a, M, delta_it=delta_it)),
+                    "clt":   ("CL_t",   lambda m, a, M: mod_aero.get_cl_total(m, a, M, delta_it=delta_it)),
+                    "cdt":   ("CD_t",   lambda m, a, M: mod_aero.get_cd_total(m, a, M, delta_it=delta_it)),
+                    "cmt":   ("CM_t",   lambda m, a, M: mod_aero.get_cm_total(m, a, M, delta_it=delta_it)),
                 }
                 if args.cmd == "all":
                     _print_aero_all(_model[0], args.alpha, args.mach,
