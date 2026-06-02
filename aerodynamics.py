@@ -259,16 +259,19 @@ def get_cm_total(model, alpha, mach, delta_it=0.0):
 
     CM_t = CM_wb + (S_ht*c_ht / S_wb*c_wb) * CM_ht
            - (S_ht*x̄_ht / S_wb*c_wb) * (CL_ht*cos(ε) - CD_ht*sin(ε))
-           + (S_ht*z̄_ht / S_wb*c_wb) * (CL_ht*cos(ε) + CD_ht*sin(ε))
-    avec x̄_ht = x_ht*cos(ε) - z_ht*sin(ε)
-         z̄_ht = z_ht*cos(ε) - x_ht*sin(ε)
+           + (S_ht*z̄_ht / S_wb*c_wb) * (CD_ht*cos(ε) + CL_ht*sin(ε))
+    avec x̄_ht = x_ht*cos(α) - z_ht*sin(α)
+         z̄_ht = z_ht*cos(α) + x_ht*sin(α)
     """
     eps_rad = np.radians(float(f_downwash(alpha)))
     cos_e   = np.cos(eps_rad)
     sin_e   = np.sin(eps_rad)
+    alpha_rad = np.radians(float(alpha))
+    cos_a     = np.cos(alpha_rad)
+    sin_a     = np.sin(alpha_rad)
 
-    x_bar = _X_HT * cos_e - _Z_HT * sin_e
-    z_bar = _Z_HT * cos_e - _X_HT * sin_e
+    x_bar = _X_HT * cos_a - _Z_HT * sin_a
+    z_bar = _Z_HT * cos_a + _X_HT * sin_a
 
     cm_wb = _interp(model['f_cmwb'], alpha, mach)
     cm_ht = get_cm_ht(model, alpha, mach, delta_it=delta_it)
@@ -279,7 +282,7 @@ def get_cm_total(model, alpha, mach, delta_it=0.0):
     return (cm_wb
             + (_S_HT * _C_HT / (_S_WB * _C_WB)) * cm_ht
             - ratio * x_bar * (cl_ht * cos_e - cd_ht * sin_e)
-            + ratio * z_bar * (cl_ht * cos_e + cd_ht * sin_e))
+            + ratio * z_bar * (cl_ht * sin_e + cd_ht * cos_e))
 
 
 # ---------------------------------------------------------------------------
