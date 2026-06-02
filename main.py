@@ -501,13 +501,13 @@ def loop_aero():
                                        args.alpha, args.mach)
 
             elif args.cmd == "downwash":
-                eps = mod_aero.f_downwash(args.alpha, delta_it=args.delta_it)
+                eps = mod_aero.f_downwash(args.alpha)
                 print()
                 print("=" * 50)
-                print(f"  α = {args.alpha:.2f} °    δit = {args.delta_it:.2f} °")
+                print(f"  α = {args.alpha:.2f} °")
                 print("─" * 50)
-                print(f"  ε  = ε0 + εα·α - δit")
-                print(f"     = {mod_aero._EPS0} + {mod_aero._EPS_ALPHA}×{args.alpha:.2f} - {args.delta_it:.2f}")
+                print(f"  ε  = ε0 + εα·α")
+                print(f"     = {mod_aero._EPS0} + {mod_aero._EPS_ALPHA}×{args.alpha:.2f}")
                 print(f"  ε  =  {eps:>10.4f}  deg")
                 print("=" * 50)
                 print()

@@ -134,6 +134,7 @@ def build_aero_model(file_wb=DEFAULT_FILE_WB, file_ht=DEFAULT_FILE_HT):
         'f_cmwb': _build_grid(df_wb, 'CMy'),
         'f_clht': _build_grid(df_ht, 'CL'),
         'f_cdht': _build_grid(df_ht, 'CDtot'),
+        'f_cmht': _build_grid(df_ht, 'CMy'),
     }
 
 
@@ -164,16 +165,16 @@ def get_cm_wb(model, alpha, mach):
 # Downwash — angle de déviation de l'écoulement de l'aile vers l'empennage
 # ---------------------------------------------------------------------------
 
-# Coefficients du modèle linéaire : ε = ε0 + εα × α - δit  [deg]
+# Coefficients du modèle linéaire : ε = ε0 + εα × α [deg]
 _EPS0      = 1.18   # downwash à incidence nulle [deg]
 _EPS_ALPHA = 0.37   # gradient de downwash       [deg/deg]
 
 
-def f_downwash(alpha, eps0=_EPS0, eps_alpha=_EPS_ALPHA, delta_it=0.0):
+def f_downwash(alpha, eps0=_EPS0, eps_alpha=_EPS_ALPHA):
     """
     Calcule l'angle de downwash ε à l'empennage arrière.
 
-    Modèle linéaire :  ε = ε0 + εα × α - δit
+    Modèle linéaire :  ε = ε0 + εα × α
 
     Paramètres
     ----------
@@ -183,27 +184,31 @@ def f_downwash(alpha, eps0=_EPS0, eps_alpha=_EPS_ALPHA, delta_it=0.0):
         Downwash à incidence nulle [deg]  (défaut : 1.18)
     eps_alpha : float
         Gradient de downwash [deg/deg]   (défaut : 0.37)
-    delta_it : float
-        Calage de l'empennage [deg]       (défaut : 0.0)
 
     Retourne
     --------
     float ou ndarray — angle de downwash ε [deg]
     """
     alpha = np.asarray(alpha, dtype=float)
-    return eps0 + eps_alpha * alpha - delta_it
+    return eps0 + eps_alpha * alpha
 
 
 def get_cl_ht(model, alpha, mach, delta_it=0.0):
     """CL de l'empennage arrière pour alpha [deg] et Mach."""
-    alpha_ht = alpha - f_downwash(alpha, delta_it=delta_it)
+    alpha_ht = alpha - f_downwash(alpha) + delta_it
     return _interp(model['f_clht'], alpha_ht, mach)
 
 
 def get_cd_ht(model, alpha, mach, delta_it=0.0):
     """CD total de l'empennage arrière pour alpha [deg] et Mach."""
-    alpha_ht = alpha - f_downwash(alpha, delta_it=delta_it)
+    alpha_ht = alpha - f_downwash(alpha) + delta_it
     return _interp(model['f_cdht'], alpha_ht, mach)
+
+
+def get_cm_ht(model, alpha, mach, delta_it=0.0):
+    """Cm (moment de tangage) de l'empennage arrière pour alpha [deg] et Mach."""
+    alpha_ht = alpha - f_downwash(alpha) + delta_it
+    return _interp(model['f_cmht'], alpha_ht, mach)
 
 
 # ---------------------------------------------------------------------------
@@ -213,6 +218,7 @@ def get_cd_ht(model, alpha, mach, delta_it=0.0):
 _S_WB = 859.0   # surface de référence aile + fuselage   [m²]
 _C_WB = 11.0    # corde aérodynamique moyenne aile (MAC)  [m]
 _S_HT = 205.0   # surface de référence stabilisateur HT   [m²]
+_C_HT = 6.77    # corde aérodynamique moyenne empennage   [m]
 _X_HT = 32.0    # bras de levier longitudinal HT          [m]
 _Z_HT = 1.24    # bras de levier vertical HT              [m]
 
@@ -225,34 +231,55 @@ def get_cl_total(model, alpha, mach, delta_it=0.0):
     """
     CL total de l'avion.
 
-    CL_t = CL_wb + (S_ht / S_wb) * CL_ht
+    CL_t = CL_wb + (S_ht/S_wb) * (CL_ht*cos(ε) - CD_ht*sin(ε))
     """
+    eps_rad = np.radians(float(f_downwash(alpha)))
     cl_wb = _interp(model['f_clwb'], alpha, mach)
     cl_ht = get_cl_ht(model, alpha, mach, delta_it=delta_it)
-    return cl_wb + (_S_HT / _S_WB) * cl_ht
+    cd_ht = get_cd_ht(model, alpha, mach, delta_it=delta_it)
+    return cl_wb + (_S_HT / _S_WB) * (cl_ht * np.cos(eps_rad) - cd_ht * np.sin(eps_rad))
 
 
 def get_cd_total(model, alpha, mach, delta_it=0.0):
     """
     CD total de l'avion.
 
-    CD_t = CD_wb + (S_ht / S_wb) * CD_ht
+    CD_t = CD_wb + (S_ht/S_wb) * (CD_ht*cos(ε) + CL_ht*sin(ε))
     """
+    eps_rad = np.radians(float(f_downwash(alpha)))
     cd_wb = _interp(model['f_cdwb'], alpha, mach)
+    cl_ht = get_cl_ht(model, alpha, mach, delta_it=delta_it)
     cd_ht = get_cd_ht(model, alpha, mach, delta_it=delta_it)
-    return cd_wb + (_S_HT / _S_WB) * cd_ht
+    return cd_wb + (_S_HT / _S_WB) * (cd_ht * np.cos(eps_rad) + cl_ht * np.sin(eps_rad))
 
 
 def get_cm_total(model, alpha, mach, delta_it=0.0):
     """
-    CM total de l'avion par rapport au centre aérodynamique de l'aile.
+    CM total de l'avion.
 
-    CM_t = CM_wb + (S_ht / (S_wb * c_wb)) * (x_ht * CL_ht - z_ht * CD_ht)
+    CM_t = CM_wb + (S_ht*c_ht / S_wb*c_wb) * CM_ht
+           - (S_ht*x̄_ht / S_wb*c_wb) * (CL_ht*cos(ε) - CD_ht*sin(ε))
+           + (S_ht*z̄_ht / S_wb*c_wb) * (CL_ht*cos(ε) + CD_ht*sin(ε))
+    avec x̄_ht = x_ht*cos(ε) - z_ht*sin(ε)
+         z̄_ht = z_ht*cos(ε) - x_ht*sin(ε)
     """
+    eps_rad = np.radians(float(f_downwash(alpha)))
+    cos_e   = np.cos(eps_rad)
+    sin_e   = np.sin(eps_rad)
+
+    x_bar = _X_HT * cos_e - _Z_HT * sin_e
+    z_bar = _Z_HT * cos_e - _X_HT * sin_e
+
     cm_wb = _interp(model['f_cmwb'], alpha, mach)
+    cm_ht = get_cm_ht(model, alpha, mach, delta_it=delta_it)
     cl_ht = get_cl_ht(model, alpha, mach, delta_it=delta_it)
     cd_ht = get_cd_ht(model, alpha, mach, delta_it=delta_it)
-    return cm_wb + (_S_HT / (_S_WB * _C_WB)) * (_X_HT * cl_ht - _Z_HT * cd_ht)
+
+    ratio = _S_HT / (_S_WB * _C_WB)
+    return (cm_wb
+            + (_S_HT * _C_HT / (_S_WB * _C_WB)) * cm_ht
+            - ratio * x_bar * (cl_ht * cos_e - cd_ht * sin_e)
+            + ratio * z_bar * (cl_ht * cos_e + cd_ht * sin_e))
 
 
 # ---------------------------------------------------------------------------
