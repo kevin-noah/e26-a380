@@ -27,7 +27,7 @@ MODULES = [
     {"id": 1, "cle": "atm",  "module": mod_atm,  "dispo": True},
     {"id": 2, "cle": "conv", "module": mod_conv,  "dispo": True},
     {"id": 3, "cle": "aero", "module": mod_aero,  "dispo": True},
-    {"id": 4, "cle": "prop", "module": mod_prop,  "dispo": False},
+    {"id": 4, "cle": "prop", "module": mod_prop,  "dispo": True},
     {"id": 5, "cle": "trim", "module": mod_trim,  "dispo": False},
 ]
 
@@ -566,6 +566,98 @@ def loop_aero():
             pass
 
 
+# ============================== MODULE PROPULSION =============================
+
+def print_prop_menu():
+    print()
+    print("─" * 62)
+    print(f"  {mod_prop.NOM}")
+    print("─" * 62)
+    print("  thrust --n1 <N1> --mach <M> --h <alt> [--disa <v>]")
+    print("         Poussée nette FN d'un moteur")
+    print()
+    print("  wf     --n1 <N1> --mach <M> --h <alt> [--disa <v>]")
+    print("         Débit carburant WF d'un moteur")
+    print()
+    print("  all    --n1 <N1> --mach <M> --h <alt> [--disa <v>]")
+    print("         Poussée et débit carburant")
+    print()
+    print("  plot   --h <alt> [--disa <v>]")
+    print("         Graphiques 2D et 3D de FN et WF vs N1 et Mach")
+    print()
+    print("  help  Afficher cette aide")
+    print("  back  Retour au menu principal")
+    print("─" * 62)
+    print()
+
+
+def _build_prop_parser():
+    parser = _SilentParser(prog="")
+    sub    = parser.add_subparsers(dest="cmd")
+    sub.required = True
+
+    for cmd in ("thrust", "wf", "all"):
+        p = sub.add_parser(cmd)
+        p.add_argument("--n1",   type=float, required=True, metavar="N1")
+        p.add_argument("--mach", type=float, required=True, metavar="MACH")
+        p.add_argument("--h",    type=float, required=True, metavar="ALTITUDE")
+        p.add_argument("--disa", type=float, default=0.0,   metavar="ΔISA")
+
+    p = sub.add_parser("plot")
+    p.add_argument("--h",    type=float, required=True, metavar="ALTITUDE")
+    p.add_argument("--disa", type=float, default=0.0,   metavar="ΔISA")
+
+    return parser
+
+
+def loop_prop():
+    """Boucle interactive du module de propulsion."""
+    print_prop_menu()
+    parser = _build_prop_parser()
+
+    while True:
+        try:
+            ligne = input("  PROP> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+
+        if not ligne:
+            continue
+        if ligne.lower() in ("back", "menu", "b"):
+            break
+        if ligne.lower() in ("help", "aide", "?"):
+            print_prop_menu()
+            continue
+
+        try:
+            args = parser.parse_args(shlex.split(ligne))
+
+            fn  = mod_prop.get_thrust(args.n1, args.mach, args.h, args.disa)
+            wf  = mod_prop.get_fuel_flow(args.n1, args.mach, args.h, args.disa)
+
+            print()
+            print("=" * 52)
+            print(f"  N1 = {args.n1:.2f}    Mach = {args.mach:.4f}"
+                  f"    h = {args.h:.0f} m    ΔISA = {args.disa:+.1f} °C")
+            print("─" * 52)
+            if args.cmd in ("thrust", "all"):
+                print(f"  {'FN':<10} = {fn:>16.6f}")
+            if args.cmd in ("wf", "all"):
+                print(f"  {'WF':<10} = {wf:>16.6f}")
+            print("=" * 52)
+            print()
+
+            elif args.cmd == "plot":
+                print("  Affichage des graphiques (fermer la fenêtre pour continuer)...")
+                mod_prop.plot_prop(args.h, delta_isa=args.disa)
+
+        except (ValueError, FileNotFoundError) as e:
+            print(f"  Erreur : {e}\n")
+        except SystemExit:
+            pass
+
+
 # ============================== MODULES EN DÉVELOPPEMENT ======================
 
 def loop_dev(module):
@@ -584,7 +676,7 @@ _LOOPS = {
     "atm":  loop_atm,
     "conv": loop_conv,
     "aero": loop_aero,
-    "prop": lambda: loop_dev(mod_prop),
+    "prop": loop_prop,
     "trim": lambda: loop_dev(mod_trim),
 }
 
