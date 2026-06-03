@@ -27,7 +27,7 @@ MODULES = [
     {"id": 1, "cle": "atm",  "module": mod_atm,  "dispo": True},
     {"id": 2, "cle": "conv", "module": mod_conv,  "dispo": True},
     {"id": 3, "cle": "aero", "module": mod_aero,  "dispo": True},
-    {"id": 4, "cle": "prop", "module": mod_prop,  "dispo": True},
+    {"id": 4, "cle": "prop", "module": mod_prop,  "dispo": True, "note": "émissions OACI à venir"},
     {"id": 5, "cle": "trim", "module": mod_trim,  "dispo": False},
 ]
 
@@ -44,7 +44,12 @@ def print_main_menu():
     print()
     for m in MODULES:
         # Indique visuellement les modules non encore disponibles
-        statut = "" if m["dispo"] else "  [en développement]"
+        if not m["dispo"]:
+            statut = "  [en développement]"
+        elif m.get("note"):
+            statut = f"  [{m['note']}]"
+        else:
+            statut = ""
         print(f"  {m['id']}  {m['module'].NOM:<30}{statut}")
         print(f"     {m['module'].DESCRIPTION}")
         print()
@@ -588,6 +593,7 @@ def print_prop_menu():
     print("  help  Afficher cette aide")
     print("  back  Retour au menu principal")
     print("─" * 62)
+    print("  [!] Modélisation des émissions OACI — à venir")
     print()
 
 
@@ -633,24 +639,24 @@ def loop_prop():
         try:
             args = parser.parse_args(shlex.split(ligne))
 
-            fn  = mod_prop.get_thrust(args.n1, args.mach, args.h, args.disa)
-            wf  = mod_prop.get_fuel_flow(args.n1, args.mach, args.h, args.disa)
-
-            print()
-            print("=" * 52)
-            print(f"  N1 = {args.n1:.2f}    Mach = {args.mach:.4f}"
-                  f"    h = {args.h:.0f} m    ΔISA = {args.disa:+.1f} °C")
-            print("─" * 52)
-            if args.cmd in ("thrust", "all"):
-                print(f"  {'FN':<10} = {fn:>16.6f}")
-            if args.cmd in ("wf", "all"):
-                print(f"  {'WF':<10} = {wf:>16.6f}")
-            print("=" * 52)
-            print()
-
-            elif args.cmd == "plot":
+            if args.cmd == "plot":
                 print("  Affichage des graphiques (fermer la fenêtre pour continuer)...")
                 mod_prop.plot_prop(args.h, delta_isa=args.disa)
+            else:
+                fn = mod_prop.get_thrust(args.n1, args.mach, args.h, args.disa)
+                wf = mod_prop.get_fuel_flow(args.n1, args.mach, args.h, args.disa)
+
+                print()
+                print("=" * 52)
+                print(f"  N1 = {args.n1:.2f}    Mach = {args.mach:.4f}"
+                      f"    h = {args.h:.0f} m    ΔISA = {args.disa:+.1f} °C")
+                print("─" * 52)
+                if args.cmd in ("thrust", "all"):
+                    print(f"  {'FN':<10} = {fn:>16.6f}")
+                if args.cmd in ("wf", "all"):
+                    print(f"  {'WF':<10} = {wf:>16.6f}")
+                print("=" * 52)
+                print()
 
         except (ValueError, FileNotFoundError) as e:
             print(f"  Erreur : {e}\n")
