@@ -271,7 +271,7 @@ def get_cm_total(model, alpha, mach, delta_it=0.0):
     sin_a     = np.sin(alpha_rad)
 
     x_bar = _X_HT * cos_a + _Z_HT * sin_a
-    z_bar = -_Z_HT * cos_a + _X_HT * sin_a
+    z_bar = _Z_HT * cos_a - _X_HT * sin_a
 
     cm_wb = _interp(model['f_cmwb'], alpha, mach)
     cm_ht = get_cm_ht(model, alpha, mach, delta_it=delta_it)
