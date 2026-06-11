@@ -28,6 +28,13 @@ FT = 0.3048     # 1 ft en m
 NAVY = "#1B3A5C"   # accent de l'identité visuelle
 RED  = "#D7263D"   # point courant sur les graphes
 
+# Piles de polices : Helvetica Neue en premier (préférence utilisateur),
+# SF Mono pour les chiffres
+FONT_UI = ('"Helvetica Neue", Helvetica, -apple-system, BlinkMacSystemFont, '
+           'Arial, sans-serif')
+FONT_MONO = ('ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, '
+             '"Source Code Pro", monospace')
+
 ASSETS = Path(__file__).parent / "assets"
 HERO_VIDEO = ASSETS / "video-accueil.mp4"
 SIDEBAR_IMG = ASSETS / "sidebar-airflow.jpg"
@@ -63,15 +70,16 @@ st.markdown("""
 .am-grid.cols-5 > .am-metric:not(:nth-child(5n+1)) { border-left: 1px solid #EEF1F5; }
 .am-grid.cols-5 > .am-metric:nth-child(n+6) { border-top: 1px solid #EEF1F5; }
 .am-mlabel { font-size: 14px; font-weight: 600; color: #1A2230; }
-.am-value { font-family: "Source Code Pro", ui-monospace, SFMono-Regular,
-            monospace; font-variant-numeric: tabular-nums; font-size: 42px;
+.am-value { font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo,
+            "Source Code Pro", monospace;
+            font-variant-numeric: tabular-nums; font-size: 42px;
             font-weight: 600; color: #1A2230; letter-spacing: -.01em;
             line-height: 1.15; margin-top: 2px; display: flex;
             align-items: baseline; gap: 8px; }
 .am-grid.sm .am-value { font-size: 26px; }
 .am-unit { font-size: .45em; font-weight: 600; color: #8B93A1; }
 .am-pill { display: inline-block; margin-top: 8px;
-           font-family: "Source Code Pro", ui-monospace, monospace;
+           font-family: ui-monospace, "SF Mono", SFMono-Regular, monospace;
            font-size: 13px; font-weight: 600; color: #5B6573;
            background: #F4F6F9; border: 1px solid #E7EBF0;
            border-radius: 99px; padding: 2px 12px; }
@@ -80,7 +88,10 @@ st.markdown("""
 .am-ratio { display: flex; align-items: baseline; gap: 10px; }
 .am-ratio + .am-ratio { border-left: 1px solid #E4E8EE; padding-left: 24px; }
 .am-rlabel { font-size: 13.5px; color: #5B6573; }
-.am-rvalue { font-family: "Source Code Pro", ui-monospace, monospace;
+.am-math { font-family: "STIX Two Math", "STIX Two Text", "Cambria Math",
+           "Times New Roman", serif; font-size: 1.08em; }
+.am-math i { font-style: italic; font-family: inherit; }
+.am-rvalue { font-family: ui-monospace, "SF Mono", SFMono-Regular, monospace;
              font-size: 19px; font-weight: 600; color: #1A2230; }
 </style>
 """, unsafe_allow_html=True)
@@ -95,6 +106,15 @@ def page_head(titre, lede=""):
     lede_html = f'<p class="am-lede">{lede}</p>' if lede else ""
     st.markdown(f'<h1 class="am-h1">{titre}</h1>{lede_html}',
                 unsafe_allow_html=True)
+
+
+def sym(expr):
+    """Expression symbolique en police mathématique (style LaTeX).
+
+    Utiliser <i>…</i> pour les variables et <sub>/<sup> pour les indices :
+    sym('<i>θ</i> = <i>T</i>/<i>T</i><sub>0</sub>')
+    """
+    return f'<span class="am-math">{expr}</span>'
 
 
 def metric(label, value, unit="", pill=None):
@@ -176,8 +196,8 @@ def _video_b64(path, mtime):
 # l'autoplay — dans l'iframe, un script force muted puis play().
 _HERO_HTML = """
 <style>
-body {{ margin: 0; font-family: "Source Sans Pro", -apple-system,
-        BlinkMacSystemFont, sans-serif; }}
+body {{ margin: 0; font-family: "Helvetica Neue", Helvetica, -apple-system,
+        BlinkMacSystemFont, Arial, sans-serif; }}
 .hero {{ position: relative; height: 340px; border-radius: 12px;
          overflow: hidden; }}
 .hero video {{ position: absolute; inset: 0; width: 100%; height: 100%;
@@ -300,13 +320,13 @@ def page_atm():
 
     with st.container(border=True):
         c1, c2 = st.columns([2.8, 1], vertical_alignment="bottom")
-        c1.slider("Altitude h [m]", 0.0, 20000.0, step=50.0,
+        c1.slider(r"Altitude $h$ [m]", 0.0, 20000.0, step=50.0,
                   key="atm_h_slider", on_change=_h_from_slider)
         c2.number_input("Saisie directe [m]", 0.0, 20000.0, step=100.0,
                         key="atm_h_input", on_change=_h_from_input)
         h = float(st.session_state.atm_h_slider)
         c1.caption(f"≈ {fr(h / FT)} ft")
-        disa = st.slider("Écart ΔISA [°C]", -30.0, 30.0, 0.0, 1.0)
+        disa = st.slider(r"Écart $\Delta_{ISA}$ [°C]", -30.0, 30.0, 0.0, 1.0)
         st.caption("plus froid que standard" if disa < 0 else
                    "plus chaud que standard" if disa > 0 else
                    "atmosphère standard")
@@ -315,19 +335,26 @@ def page_atm():
 
     with st.container(border=True):
         metrics_card("État de l'air au point courant", [
-            metric("Température T", f"{props['T']:.2f}", "K",
+            metric(f"Température {sym('<i>T</i>')}", f"{props['T']:.2f}", "K",
                    f"{props['T'] - 273.15:+.1f} °C"),
-            metric("Pression P", fr(props['P']), "Pa",
+            metric(f"Pression {sym('<i>P</i>')}", fr(props['P']), "Pa",
                    f"{props['P'] / 100:.1f} hPa"),
-            metric("Masse volumique ρ", f"{props['rho']:.4f}", "kg/m³",
+            metric(f"Masse volumique {sym('<i>ρ</i>')}",
+                   f"{props['rho']:.4f}", "kg/m³",
                    f"{props['sigma'] * 100:.1f} % de ρ₀"),
-            metric("Vitesse du son a", f"{props['a']:.1f}", "m/s",
+            metric(f"Vitesse du son {sym('<i>a</i>')}",
+                   f"{props['a']:.1f}", "m/s",
                    f"{props['a'] / KT:.0f} kt"),
         ], cols=2)
 
-    ratios_strip([("θ = T/T₀", f"{props['theta']:.4f}"),
-                  ("δ = P/P₀", f"{props['delta']:.4f}"),
-                  ("σ = ρ/ρ₀", f"{props['sigma']:.4f}")])
+    ratios_strip([
+        (sym('<i>θ</i> = <i>T</i>/<i>T</i><sub>0</sub>'),
+         f"{props['theta']:.4f}"),
+        (sym('<i>δ</i> = <i>P</i>/<i>P</i><sub>0</sub>'),
+         f"{props['delta']:.4f}"),
+        (sym('<i>σ</i> = <i>ρ</i>/<i>ρ</i><sub>0</sub>'),
+         f"{props['sigma']:.4f}"),
+    ])
 
     hs = np.linspace(0.0, 20000.0, 201)
     profils = [
@@ -350,7 +377,7 @@ def page_atm():
                                  marker=dict(color=RED, size=9),
                                  showlegend=False), row=1, col=i)
     fig.update_yaxes(title_text="h [m]", row=1, col=1)
-    fig.update_layout(height=420, template="plotly_white",
+    fig.update_layout(height=420, template="plotly_white", font=dict(family=FONT_UI),
                       margin=dict(t=40, b=40))
     with st.container(border=True):
         st.markdown('<div class="am-card-title">Profils atmosphériques '
@@ -359,10 +386,21 @@ def page_atm():
         st.plotly_chart(fig)
 
     with st.expander("Altitude à partir de la pression"):
-        p_query = st.number_input("Pression P [Pa]", 5000.0, 110000.0,
+        p_query = st.number_input(r"Pression $P$ [Pa]", 5000.0, 110000.0,
                                   float(props['P']), 100.0)
         h_inv = mod_atm.altitude_from_pressure(p_query, disa)
         st.metric("Altitude h", f"{float(h_inv):,.1f} m")
+
+    with st.expander("Formules du modèle ISA"):
+        st.latex(r"T = T_0 + L\,h + \Delta T_{ISA}"
+                 r"\qquad (h \le 11\,000\ \mathrm{m},\ L = -6.5\ "
+                 r"\mathrm{K/km})")
+        st.latex(r"P = P_0\left(\frac{T - \Delta T_{ISA}}{T_0}\right)"
+                 r"^{-g/(R\,L)}\qquad\text{(pression indépendante de }"
+                 r"\Delta T_{ISA})")
+        st.latex(r"\rho = \frac{P}{R\,T}\qquad a = \sqrt{\gamma\,R\,T}")
+        st.latex(r"\theta = \frac{T}{T_0}\qquad \delta = \frac{P}{P_0}"
+                 r"\qquad \sigma = \frac{\rho}{\rho_0}")
 
 
 def page_conv():
@@ -430,7 +468,7 @@ def page_conv():
     fig.add_trace(go.Scatter(x=[cur], y=[h], mode="markers",
                              marker=dict(color=RED, size=9),
                              showlegend=False))
-    fig.update_layout(height=420, template="plotly_white",
+    fig.update_layout(height=420, template="plotly_white", font=dict(family=FONT_UI),
                       xaxis_title=y_label, yaxis_title="h [m]",
                       margin=dict(t=40, b=40))
     with st.container(border=True):
@@ -440,6 +478,15 @@ def page_conv():
                    f"{'Mach' if kind_in == 'mach' else unite} · "
                    f"ΔISA = {disa:+.0f} °C")
         st.plotly_chart(fig)
+
+    with st.expander("Formules de conversion"):
+        st.latex(r"V_{TAS} = M\,a_0\sqrt{\theta}")
+        st.latex(r"V_{CAS} = a_0\sqrt{5\left\{\left[\delta\left("
+                 r"(1+0.2M^2)^{3.5}-1\right)+1\right]^{1/3.5}-1\right\}}")
+        st.latex(r"M = \sqrt{5\left\{\left[\frac{1}{\delta}\left(\left["
+                 r"1+0.2\left(\frac{V_{CAS}}{a_0}\right)^{2}\right]^{3.5}"
+                 r"-1\right)+1\right]^{1/3.5}-1\right\}}")
+        st.caption("TAS ↔ CAS : passage obligatoire par le nombre de Mach.")
 
 
 def page_aero():
@@ -455,9 +502,11 @@ def page_aero():
 
     with st.container(border=True):
         c1, c2, c3 = st.columns(3)
-        alpha = c1.slider("Angle d'attaque α [deg]", a_min, a_max, 2.0, 0.1)
-        mach = c2.slider("Mach", m_min, m_max, min(0.85, m_max), 0.01)
-        dit = c3.slider("Calage empennage δ_it [deg]", -10.0, 10.0, 0.0, 0.5)
+        alpha = c1.slider(r"Angle d'attaque $\alpha$ [deg]",
+                          a_min, a_max, 2.0, 0.1)
+        mach = c2.slider(r"Mach $M$", m_min, m_max, min(0.85, m_max), 0.01)
+        dit = c3.slider(r"Calage empennage $\delta_{it}$ [deg]",
+                        -10.0, 10.0, 0.0, 0.5)
 
     eps = float(mod_aero.f_downwash(alpha))
 
@@ -480,15 +529,18 @@ def page_aero():
     with st.container(border=True):
         for nom, cl, cd, cm in rows:
             metrics_card(nom, [
-                metric("CL", f"{cl:.4f}"),
-                metric("CD", f"{cd:.5f}"),
-                metric("CM", f"{cm:.4f}"),
+                metric(sym('<i>C</i><sub>L</sub>'), f"{cl:.4f}"),
+                metric(sym('<i>C</i><sub>D</sub>'), f"{cd:.5f}"),
+                metric(sym('<i>C</i><sub>M</sub>'), f"{cm:.4f}"),
             ], cols=3, small=True)
 
     ratios_strip([
-        ("Downwash ε", f"{eps:.3f}°"),
-        ("α_ht = α − ε + δ_it", f"{alpha - eps + dit:.3f}°"),
-        ("Finesse CL_t/CD_t", f"{cl_t / cd_t:.2f}" if cd_t else "—"),
+        (f"Downwash {sym('<i>ε</i>')}", f"{eps:.3f}°"),
+        (sym('<i>α</i><sub>ht</sub> = <i>α</i> − <i>ε</i> + '
+             '<i>δ</i><sub>it</sub>'),
+         f"{alpha - eps + dit:.3f}°"),
+        (f"Finesse {sym('<i>C</i><sub>L,t</sub>/<i>C</i><sub>D,t</sub>')}",
+         f"{cl_t / cd_t:.2f}" if cd_t else "—"),
     ])
 
     tab1, tab2, tab3 = st.tabs(["Coefficients vs α", "Polaire", "Surface 3D"])
@@ -515,7 +567,7 @@ def page_aero():
                                      marker=dict(color=RED, size=9),
                                      showlegend=False), row=1, col=i)
         fig.update_xaxes(title_text="α [deg]")
-        fig.update_layout(height=420, template="plotly_white",
+        fig.update_layout(height=420, template="plotly_white", font=dict(family=FONT_UI),
                           title=f"Coefficients totaux — M = {mach:.2f}, "
                                 f"δ_it = {dit:+.1f}°")
         st.plotly_chart(fig)
@@ -529,7 +581,7 @@ def page_aero():
                                  mode="markers",
                                  marker=dict(color=RED, size=9),
                                  showlegend=False))
-        fig.update_layout(height=420, template="plotly_white",
+        fig.update_layout(height=420, template="plotly_white", font=dict(family=FONT_UI),
                           xaxis_title="CD_t", yaxis_title="CL_t",
                           title=f"Polaire avion complet — M = {mach:.2f}, "
                                 f"δ_it = {dit:+.1f}°")
@@ -539,12 +591,34 @@ def page_aero():
         coef = st.selectbox("Coefficient", ["CL_t", "CD_t", "CM_t"])
         a_s, m_s, z = aero_surface(coef, dit)
         fig = go.Figure(go.Surface(x=m_s, y=a_s, z=z, colorscale="Viridis"))
-        fig.update_layout(height=560, template="plotly_white",
+        fig.update_layout(height=560, template="plotly_white", font=dict(family=FONT_UI),
                           scene=dict(xaxis_title="Mach",
                                      yaxis_title="α [deg]",
                                      zaxis_title=coef),
                           title=f"{coef}(α, M) — δ_it = {dit:+.1f}°")
         st.plotly_chart(fig)
+
+    with st.expander("Formules du modèle"):
+        st.latex(r"\varepsilon = \varepsilon_0 + \varepsilon_\alpha\,\alpha"
+                 r" = 1.18 + 0.37\,\alpha\qquad"
+                 r"\alpha_{ht} = \alpha - \varepsilon + \delta_{it}")
+        st.latex(r"C_{L,t} = C_{L,wb} + \frac{S_{ht}}{S_{wb}}"
+                 r"\left(C_{L,ht}\cos\varepsilon - C_{D,ht}\sin\varepsilon"
+                 r"\right)")
+        st.latex(r"C_{D,t} = C_{D,wb} + \frac{S_{ht}}{S_{wb}}"
+                 r"\left(C_{D,ht}\cos\varepsilon + C_{L,ht}\sin\varepsilon"
+                 r"\right)")
+        st.latex(r"C_{M,t} = C_{M,wb}"
+                 r" + \frac{S_{ht}\,\bar c_{ht}}{S_{wb}\,\bar c_{wb}}\,"
+                 r"C_{M,ht}"
+                 r" - \frac{S_{ht}\,\bar x_{ht}}{S_{wb}\,\bar c_{wb}}"
+                 r"\left(C_{L,ht}\cos\varepsilon - C_{D,ht}\sin\varepsilon"
+                 r"\right)"
+                 r" + \frac{S_{ht}\,\bar z_{ht}}{S_{wb}\,\bar c_{wb}}"
+                 r"\left(C_{L,ht}\sin\varepsilon + C_{D,ht}\cos\varepsilon"
+                 r"\right)")
+        st.latex(r"\bar x_{ht} = x_{ht}\cos\alpha - z_{ht}\sin\alpha\qquad"
+                 r"\bar z_{ht} = z_{ht}\cos\alpha + x_{ht}\sin\alpha")
 
 
 def page_prop():
@@ -555,10 +629,10 @@ def page_prop():
 
     with st.container(border=True):
         c1, c2, c3, c4 = st.columns(4)
-        n1 = c1.slider("Fan speed N1 [%]", 60.0, 100.0, 90.0, 0.5)
-        mach = c2.slider("Mach", 0.0, 0.85, 0.85, 0.01)
-        h = c3.slider("Altitude h [m]", 0.0, 15000.0, 10668.0, 50.0)
-        disa = c4.slider("ΔISA [°C]", -30.0, 30.0, 0.0, 1.0)
+        n1 = c1.slider(r"Fan speed $N1$ [%]", 60.0, 100.0, 90.0, 0.5)
+        mach = c2.slider(r"Mach $M$", 0.0, 0.85, 0.85, 0.01)
+        h = c3.slider(r"Altitude $h$ [m]", 0.0, 15000.0, 10668.0, 50.0)
+        disa = c4.slider(r"$\Delta_{ISA}$ [°C]", -30.0, 30.0, 0.0, 1.0)
 
     fn = float(mod_prop.get_thrust(n1, mach, h, disa))
     ei = mod_prop.get_emission_indices(n1, mach, h, disa)
@@ -568,31 +642,37 @@ def page_prop():
 
     with st.container(border=True):
         metrics_card("Performances moteur", [
-            metric("Poussée nette FN", f"{fn:.4f}", "",
+            metric(f"Poussée nette {sym('<i>F</i><sub>N</sub>')}",
+                   f"{fn:.4f}", "",
                    f"× 4 moteurs = {4 * fn:.4f}"),
-            metric("Débit carburant WF", f"{wf:.4f}", "kg/s",
+            metric(f"Débit carburant {sym('<i>W</i><sub>F</sub>')}",
+                   f"{wf:.4f}", "kg/s",
                    f"{fr(wf * 3600)} kg/h"),
-            metric("W_F,C^REF (BFF)", f"{ei['WF_C_REF']:.4f}", "kg/s",
+            metric(sym('<i>W</i><sub>F,C</sub><sup>REF</sup>') + " (BFF)",
+                   f"{ei['WF_C_REF']:.4f}", "kg/s",
                    "table OACI : 0.261 – 2.738"),
         ], cols=3, small=True)
 
     with st.container(border=True):
         metrics_card("Indices d'émission généralisés (méthode Boeing "
                      "Fuel Flow)", [
-            metric("EI NOx", f"{ei['EI_NOx']:.3f}", "g/kg",
+            metric(sym('EI<sub>NOx</sub>'), f"{ei['EI_NOx']:.3f}", "g/kg",
                    f"{ei['EI_NOx'] * wf:.3f} g/s"),
-            metric("EI UHC", f"{ei['EI_UHC']:.4f}", "g/kg",
+            metric(sym('EI<sub>UHC</sub>'), f"{ei['EI_UHC']:.4f}", "g/kg",
                    f"{ei['EI_UHC'] * wf:.4f} g/s"),
-            metric("EI CO", f"{ei['EI_CO']:.3f}", "g/kg",
+            metric(sym('EI<sub>CO</sub>'), f"{ei['EI_CO']:.3f}", "g/kg",
                    f"{ei['EI_CO'] * wf:.3f} g/s"),
-            metric("EI CO₂", f"{ei['EI_CO2']:.2f}", "kg/kg",
+            metric(sym('EI<sub>CO₂</sub>'), f"{ei['EI_CO2']:.2f}", "kg/kg",
                    f"{ei['EI_CO2'] * wf:.3f} kg/s"),
         ], cols=4, small=True)
 
     ratios_strip([
-        ("N1_cor = N1/√θ", f"{n1 / np.sqrt(theta):.2f} %"),
-        ("W_F,C = WF/(δ√θ)", f"{wf / (delta * np.sqrt(theta)):.4f} kg/s"),
-        ("Humidité spécifique ω", f"{ei['omega']:.6f}"),
+        (sym('<i>N</i>1<sub>cor</sub> = <i>N</i>1/√<i>θ</i>'),
+         f"{n1 / np.sqrt(theta):.2f} %"),
+        (sym('<i>W</i><sub>F,C</sub> = <i>W</i><sub>F</sub>/'
+             '(<i>δ</i>√<i>θ</i>)'),
+         f"{wf / (delta * np.sqrt(theta)):.4f} kg/s"),
+        (f"Humidité spécifique {sym('<i>ω</i>')}", f"{ei['omega']:.6f}"),
     ])
 
     with st.expander("Masses de polluants émises"):
@@ -610,6 +690,26 @@ def page_prop():
             metric("CO", fr(em['m_CO'] * n_mot / 1000, 2), "kg"),
             metric("CO₂", fr(co2), "kg", f"{co2 / 1000:.2f} t"),
         ], cols=5, small=True)
+
+    with st.expander("Formules du modèle (méthode Boeing Fuel Flow)"):
+        st.latex(r"F_N = \bar f_{th}\!\left(\tfrac{N1}{\sqrt{\theta}},\,M"
+                 r"\right)\delta\qquad "
+                 r"W_F = \bar f_{wf}\!\left(\tfrac{N1}{\sqrt{\theta}},\,M"
+                 r"\right)\delta\sqrt{\theta}")
+        st.latex(r"W_{F,C}^{REF} = \frac{(1+0.2M^2)\,\theta^{\,3.8+y}}"
+                 r"{\delta^{\,1-x}}\,W_{F,C}\qquad x=1,\ y=0.5"
+                 r"\ \text{(Ghazi et Botez)}")
+        st.latex(r"EI_{UHC} = EI_{UHC,C}^{REF}\,\theta^{3.3}/\delta^{1.02}"
+                 r"\qquad EI_{CO} = EI_{CO,C}^{REF}\,\theta^{3.3}/"
+                 r"\delta^{1.02}")
+        st.latex(r"EI_{NO_x} = EI_{NO_x,C}^{REF}\sqrt{\delta^{1.02}/"
+                 r"\theta^{3.3}}\;e^{-19\,(\omega - 0.00634)}")
+        st.latex(r"\omega = \frac{0.62197058\;RH\;P_{SAT}}"
+                 r"{0.1P - RH\;P_{SAT}}\qquad "
+                 r"P_{SAT} = 6.107\times 10^{\frac{7.5\,(T-273.15)}"
+                 r"{T-35.85}}\qquad RH = 0.80")
+        st.latex(r"\Delta m_i = EI_i\,\Delta F_B\qquad "
+                 r"EI_{CO_2} = 3.16\ \mathrm{kg/kg}")
 
     tab1, tab2, tab3 = st.tabs(["FN / WF vs N1", "Surfaces 3D", "Émissions vs N1"])
 
@@ -629,7 +729,7 @@ def page_prop():
                                      name=f"M={M:.2f}", legendgroup=f"{M:.2f}",
                                      showlegend=False), row=1, col=2)
         fig.update_xaxes(title_text="N1 [%]")
-        fig.update_layout(height=440, template="plotly_white",
+        fig.update_layout(height=440, template="plotly_white", font=dict(family=FONT_UI),
                           title=f"h = {h:.0f} m  |  ΔISA = {disa:+.0f} °C")
         st.plotly_chart(fig)
 
@@ -643,7 +743,7 @@ def page_prop():
                                     ((fn_surf, "FN"), (wf_surf, "WF [kg/s]"))):
             fig = go.Figure(go.Surface(x=N1g, y=Mg, z=surf,
                                        colorscale="Viridis"))
-            fig.update_layout(height=480, template="plotly_white",
+            fig.update_layout(height=480, template="plotly_white", font=dict(family=FONT_UI),
                               scene=dict(xaxis_title="N1 [%]",
                                          yaxis_title="Mach",
                                          zaxis_title=nom),
@@ -662,7 +762,7 @@ def page_prop():
                                          legendgroup=f"{M:.2f}",
                                          showlegend=(i == 1)), row=1, col=i)
         fig.update_xaxes(title_text="N1 [%]")
-        fig.update_layout(height=440, template="plotly_white",
+        fig.update_layout(height=440, template="plotly_white", font=dict(family=FONT_UI),
                           title=f"Indices d'émission — h = {h:.0f} m  |  "
                                 f"ΔISA = {disa:+.0f} °C")
         st.plotly_chart(fig)

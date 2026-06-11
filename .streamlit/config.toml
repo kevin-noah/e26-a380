@@ -1,0 +1,8 @@
+[theme]
+# Accent navy de l'identité visuelle (cartes accueil, sliders, radio)
+primaryColor = "#1B3A5C"
+
+# Typographie Helvetica Neue (préférence utilisateur ; SF Pro en secours)
+font = "'Helvetica Neue', Helvetica, -apple-system, BlinkMacSystemFont, Arial, sans-serif"
+headingFont = "'Helvetica Neue', Helvetica, -apple-system, BlinkMacSystemFont, Arial, sans-serif"
+codeFont = "ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Monaco, 'Source Code Pro', monospace"

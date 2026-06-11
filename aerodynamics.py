@@ -260,8 +260,8 @@ def get_cm_total(model, alpha, mach, delta_it=0.0):
     CM_t = CM_wb + (S_ht*c_ht / S_wb*c_wb) * CM_ht
            - (S_ht*x̄_ht / S_wb*c_wb) * (CL_ht*cos(ε) - CD_ht*sin(ε))
            + (S_ht*z̄_ht / S_wb*c_wb) * (CD_ht*cos(ε) + CL_ht*sin(ε))
-    avec x̄_ht = x_ht*cos(α) - z_ht*sin(α)
-         z̄_ht = z_ht*cos(α) + x_ht*sin(α)
+    avec x̄_ht = x_ht*cos(α) + z_ht*sin(α)
+         z̄_ht = z_ht*cos(α) - x_ht*sin(α)
     """
     eps_rad = np.radians(float(f_downwash(alpha)))
     cos_e   = np.cos(eps_rad)
