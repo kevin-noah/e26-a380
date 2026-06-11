@@ -1,5 +1,19 @@
 # Performances Airbus A380 — MGA803
 
+![Python](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)
+![NumPy](https://img.shields.io/badge/NumPy-013243?logo=numpy&logoColor=white)
+![SciPy](https://img.shields.io/badge/SciPy-8CAAE6?logo=scipy&logoColor=white)
+![Pandas](https://img.shields.io/badge/Pandas-150458?logo=pandas&logoColor=white)
+![Matplotlib](https://img.shields.io/badge/Matplotlib-11557C)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.58-FF4B4B?logo=streamlit&logoColor=white)
+![Plotly](https://img.shields.io/badge/Plotly-6.8-3F4F75?logo=plotly&logoColor=white)
+
+![ÉTS](https://img.shields.io/badge/%C3%89TS-MGA803-E4002B)
+![OpenVSP](https://img.shields.io/badge/A%C3%A9ro-OpenVSP%20%2F%20VSPAERO-2E7D32)
+![Moteur](https://img.shields.io/badge/Moteur-Trent%20970-00205B)
+![Émissions](https://img.shields.io/badge/%C3%89missions-OACI%20%C2%B7%20BFF-6A1B9A)
+![Statut](https://img.shields.io/badge/Statut-4%2F5%20modules-orange)
+
 Modélisation des performances de l'Airbus A380 dans le cadre du cours MGA803 (ÉTS).
 
 ## Lancement
