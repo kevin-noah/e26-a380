@@ -8,6 +8,9 @@ propulsion et émissions OACI.
 Lancement : streamlit run app.py
 """
 
+import base64
+from pathlib import Path
+
 import numpy as np
 import streamlit as st
 import plotly.graph_objects as go
@@ -19,6 +22,10 @@ import aerodynamics as mod_aero
 import propulsion as mod_prop
 
 KT = 0.514444   # 1 kt en m/s
+
+ASSETS = Path(__file__).parent / "assets"
+HERO_VIDEO = ASSETS / "video-accueil.mp4"
+SIDEBAR_IMG = ASSETS / "sidebar-airflow.jpg"
 
 st.set_page_config(page_title="A380 — MGA803", page_icon="✈️", layout="wide")
 
@@ -66,9 +73,61 @@ def aero_surface(coef, delta_it, n_alpha=45, n_mach=25):
 # Pages
 # ---------------------------------------------------------------------------
 
+@st.cache_data
+def _video_b64(path, mtime):
+    """Vidéo encodée en base64 — mtime invalide le cache si le fichier change."""
+    return base64.b64encode(Path(path).read_bytes()).decode()
+
+
+# Rendu dans un iframe (components.html) : le HTML passé à st.markdown est
+# inséré via React et Chrome ignore alors l'attribut muted, ce qui bloque
+# l'autoplay — dans l'iframe, un script force muted puis play().
+_HERO_HTML = """
+<style>
+body {{ margin: 0; font-family: "Source Sans Pro", -apple-system,
+        BlinkMacSystemFont, sans-serif; }}
+.hero {{ position: relative; height: 340px; border-radius: 12px;
+         overflow: hidden; }}
+.hero video {{ position: absolute; inset: 0; width: 100%; height: 100%;
+               object-fit: cover; }}
+.hero .hero-shade {{ position: absolute; inset: 0; background:
+  linear-gradient(180deg, rgba(8,16,28,.10) 0%, rgba(8,16,28,.60) 100%); }}
+.hero .hero-text {{ position: absolute; left: 36px; bottom: 26px; color: #fff; }}
+.hero .hero-text h1 {{ font-size: 46px; font-weight: 700; margin: 0;
+                       letter-spacing: -.02em; line-height: 1.1; }}
+.hero .hero-text p {{ margin: 6px 0 0; font-size: 16px; opacity: .88; }}
+</style>
+<div class="hero">
+  <video autoplay loop muted playsinline
+         src="data:video/mp4;base64,{b64}"></video>
+  <div class="hero-shade"></div>
+  <div class="hero-text">
+    <h1>Airbus A380</h1>
+    <p>MGA803 — Analyse et optimisation des performances des avions · ÉTS, É2026</p>
+  </div>
+</div>
+<script>
+  const v = document.querySelector('.hero video');
+  v.muted = true;
+  // Safari peut refuser l'autoplay (réglage par site, économie d'énergie) :
+  // dans ce cas, démarrer au premier geste de l'utilisateur.
+  const tryPlay = () => v.play().then(
+    () => document.removeEventListener('pointerdown', tryPlay),
+    () => {{}});
+  tryPlay();
+  document.addEventListener('pointerdown', tryPlay);
+</script>
+"""
+
+
 def page_accueil():
-    st.title("✈️ Performances Airbus A380")
-    st.caption("MGA803 — Analyse et optimisation des performances des avions · ÉTS, É2026")
+    if HERO_VIDEO.exists():
+        b64 = _video_b64(str(HERO_VIDEO), HERO_VIDEO.stat().st_mtime)
+        st.iframe(_HERO_HTML.format(b64=b64), height=348)
+    else:
+        st.title("✈️ Performances Airbus A380")
+        st.caption("MGA803 — Analyse et optimisation des performances "
+                   "des avions · ÉTS, É2026")
     st.markdown(
         """
         Cette application regroupe les modules de modélisation développés
@@ -406,6 +465,43 @@ PAGES = {
     "Équilibrage (Trim)": page_trim,
 }
 
+@st.cache_data
+def _img_b64(path, mtime):
+    """Image encodée en base64 — mtime invalide le cache si le fichier change."""
+    return base64.b64encode(Path(path).read_bytes()).decode()
+
+
+def apply_sidebar_background():
+    """Image de flux d'air en fond de sidebar, texte passé en blanc.
+
+    CSS volontairement confiné à [data-testid="stSidebar"] : on ne touche
+    ni aux polices ni à la visibilité d'éléments (cf. mésaventure des
+    icônes Material avec le CSS global).
+    """
+    if not SIDEBAR_IMG.exists():
+        return
+    b64 = _img_b64(str(SIDEBAR_IMG), SIDEBAR_IMG.stat().st_mtime)
+    st.markdown(f"""
+    <style>
+    [data-testid="stSidebar"] {{
+        background: linear-gradient(rgba(9, 21, 38, .68),
+                                    rgba(9, 21, 38, .68)),
+                    url("data:image/jpeg;base64,{b64}") center / cover
+                    no-repeat;
+    }}
+    [data-testid="stSidebarContent"] {{ background: transparent !important; }}
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] span {{ color: #FFFFFF !important; }}
+    [data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {{
+        color: rgba(255, 255, 255, .78) !important;
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+
+
+apply_sidebar_background()
 st.sidebar.title("✈️ A380 — MGA803")
 choix_page = st.sidebar.radio("Module", list(PAGES))
 st.sidebar.caption("Analyse et optimisation des performances des avions — "
