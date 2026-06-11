@@ -27,7 +27,7 @@ MODULES = [
     {"id": 1, "cle": "atm",  "module": mod_atm,  "dispo": True},
     {"id": 2, "cle": "conv", "module": mod_conv,  "dispo": True},
     {"id": 3, "cle": "aero", "module": mod_aero,  "dispo": True},
-    {"id": 4, "cle": "prop", "module": mod_prop,  "dispo": True, "note": "émissions OACI à venir"},
+    {"id": 4, "cle": "prop", "module": mod_prop,  "dispo": True},
     {"id": 5, "cle": "trim", "module": mod_trim,  "dispo": False},
 ]
 
@@ -584,16 +584,24 @@ def print_prop_menu():
     print("  wf     --n1 <N1> --mach <M> --h <alt> [--disa <v>]")
     print("         Débit carburant WF d'un moteur")
     print()
+    print("  ei     --n1 <N1> --mach <M> --h <alt> [--disa <v>]")
+    print("         Indices d'émission OACI généralisés (méthode BFF)")
+    print()
+    print("  emis   --n1 <N1> --mach <M> --h <alt> [--disa <v>] [--t <durée s>]")
+    print("         Masses de polluants émises par un moteur")
+    print()
     print("  all    --n1 <N1> --mach <M> --h <alt> [--disa <v>]")
-    print("         Poussée et débit carburant")
+    print("         Poussée, débit carburant et indices d'émission")
     print()
     print("  plot   --h <alt> [--disa <v>]")
     print("         Graphiques 2D et 3D de FN et WF vs N1 et Mach")
     print()
+    print("  plot_emis --h <alt> [--disa <v>]")
+    print("         Courbes des indices d'émission vs N1 et Mach")
+    print()
     print("  help  Afficher cette aide")
     print("  back  Retour au menu principal")
     print("─" * 62)
-    print("  [!] Modélisation des émissions OACI — à venir")
     print()
 
 
@@ -602,16 +610,19 @@ def _build_prop_parser():
     sub    = parser.add_subparsers(dest="cmd")
     sub.required = True
 
-    for cmd in ("thrust", "wf", "all"):
+    for cmd in ("thrust", "wf", "ei", "emis", "all"):
         p = sub.add_parser(cmd)
         p.add_argument("--n1",   type=float, required=True, metavar="N1")
         p.add_argument("--mach", type=float, required=True, metavar="MACH")
         p.add_argument("--h",    type=float, required=True, metavar="ALTITUDE")
         p.add_argument("--disa", type=float, default=0.0,   metavar="ΔISA")
+        if cmd == "emis":
+            p.add_argument("--t", type=float, default=1.0,  metavar="DURÉE")
 
-    p = sub.add_parser("plot")
-    p.add_argument("--h",    type=float, required=True, metavar="ALTITUDE")
-    p.add_argument("--disa", type=float, default=0.0,   metavar="ΔISA")
+    for cmd in ("plot", "plot_emis"):
+        p = sub.add_parser(cmd)
+        p.add_argument("--h",    type=float, required=True, metavar="ALTITUDE")
+        p.add_argument("--disa", type=float, default=0.0,   metavar="ΔISA")
 
     return parser
 
@@ -642,19 +653,38 @@ def loop_prop():
             if args.cmd == "plot":
                 print("  Affichage des graphiques (fermer la fenêtre pour continuer)...")
                 mod_prop.plot_prop(args.h, delta_isa=args.disa)
+            elif args.cmd == "plot_emis":
+                print("  Affichage des graphiques (fermer la fenêtre pour continuer)...")
+                mod_prop.plot_emissions(args.h, delta_isa=args.disa)
             else:
-                fn = mod_prop.get_thrust(args.n1, args.mach, args.h, args.disa)
-                wf = mod_prop.get_fuel_flow(args.n1, args.mach, args.h, args.disa)
-
                 print()
                 print("=" * 52)
                 print(f"  N1 = {args.n1:.2f}    Mach = {args.mach:.4f}"
                       f"    h = {args.h:.0f} m    ΔISA = {args.disa:+.1f} °C")
                 print("─" * 52)
                 if args.cmd in ("thrust", "all"):
+                    fn = mod_prop.get_thrust(args.n1, args.mach, args.h, args.disa)
                     print(f"  {'FN':<10} = {fn:>16.6f}")
                 if args.cmd in ("wf", "all"):
+                    wf = mod_prop.get_fuel_flow(args.n1, args.mach, args.h, args.disa)
                     print(f"  {'WF':<10} = {wf:>16.6f}")
+                if args.cmd in ("ei", "all"):
+                    ei = mod_prop.get_emission_indices(args.n1, args.mach,
+                                                       args.h, args.disa)
+                    print(f"  {'EI_NOx':<10} = {ei['EI_NOx']:>16.6f}  g/kg")
+                    print(f"  {'EI_UHC':<10} = {ei['EI_UHC']:>16.6f}  g/kg")
+                    print(f"  {'EI_CO':<10} = {ei['EI_CO']:>16.6f}  g/kg")
+                    print(f"  {'EI_CO2':<10} = {ei['EI_CO2']:>16.6f}  kg/kg")
+                if args.cmd == "emis":
+                    em = mod_prop.get_emissions(args.n1, args.mach, args.h,
+                                                args.disa, duration=args.t)
+                    print(f"  Durée = {args.t:.1f} s    "
+                          f"Carburant brûlé = {em['fuel_burn']:.4f} kg")
+                    print("─" * 52)
+                    print(f"  {'m_NOx':<10} = {em['m_NOx']:>16.6f}  g")
+                    print(f"  {'m_UHC':<10} = {em['m_UHC']:>16.6f}  g")
+                    print(f"  {'m_CO':<10} = {em['m_CO']:>16.6f}  g")
+                    print(f"  {'m_CO2':<10} = {em['m_CO2']:>16.6f}  kg")
                 print("=" * 52)
                 print()
 
