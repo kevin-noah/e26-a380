@@ -28,6 +28,22 @@ FT = 0.3048     # 1 ft en m
 NAVY = "#1B3A5C"   # accent de l'identité visuelle
 RED  = "#D7263D"   # point courant sur les graphes
 
+# Couleur signature par module (palette système Apple) : (foncé, vif)
+# foncé = textes/pills sur fond clair ; vif = dégradés de titres, cartes
+ACCENTS = {
+    "Atmosphère":             ("#0066CC", "#0A84FF"),
+    "Conversion":             ("#8944AB", "#BF5AF2"),
+    "Aérodynamique":          ("#1D8A3E", "#30D158"),
+    "Propulsion & Émissions": ("#C25E00", "#FF9F0A"),
+    "Équilibrage (Trim)":     ("#6E6E73", "#8E8E93"),
+}
+# Courbes multi-séries (Mach) — couleurs système Apple
+APPLE_SEQ = ["#0A84FF", "#30D158", "#FF9F0A", "#BF5AF2", "#FF375F", "#64D2FF"]
+
+# Échelles des surfaces 3D, assorties à la couleur du module
+SCALE_AERO = [[0.0, "#F2FBF5"], [0.5, "#30D158"], [1.0, "#0B3D1B"]]
+SCALE_PROP = [[0.0, "#FFF6EA"], [0.5, "#FF9F0A"], [1.0, "#6B3A00"]]
+
 # Piles de polices : Helvetica Neue en premier (préférence utilisateur),
 # SF Mono pour les chiffres
 FONT_UI = ('"Helvetica Neue", Helvetica, -apple-system, BlinkMacSystemFont, '
@@ -93,6 +109,21 @@ st.markdown("""
 .am-math i { font-style: italic; font-family: inherit; }
 .am-rvalue { font-family: ui-monospace, "SF Mono", SFMono-Regular, monospace;
              font-size: 19px; font-weight: 600; color: #1A2230; }
+/* ---- Accents par module (façon site Apple) ---- */
+.am-h1.grad { background: linear-gradient(90deg, #1A2230 30%, var(--acc) 100%);
+              -webkit-background-clip: text; background-clip: text;
+              -webkit-text-fill-color: transparent; }
+.am-wrap .am-card-title { color: var(--acc, #5B6573); }
+.am-wrap .am-pill {
+    background: color-mix(in srgb, var(--acc, #5B6573) 9%, white);
+    border-color: color-mix(in srgb, var(--acc, #5B6573) 22%, white);
+    color: var(--acc, #5B6573); }
+.am-ratios.tinted {
+    background: color-mix(in srgb, var(--acc) 6%, white);
+    border-color: color-mix(in srgb, var(--acc) 18%, white); }
+.am-ratios.tinted .am-rvalue { color: var(--acc); }
+.am-ratios.tinted .am-ratio + .am-ratio {
+    border-left-color: color-mix(in srgb, var(--acc) 18%, white); }
 </style>
 """, unsafe_allow_html=True)
 
@@ -102,9 +133,11 @@ def fr(x, dec=0):
     return f"{x:,.{dec}f}".replace(",", " ")
 
 
-def page_head(titre, lede=""):
+def page_head(titre, lede="", accent=None):
+    cls = "am-h1 grad" if accent else "am-h1"
+    style = f' style="--acc:{accent}"' if accent else ""
     lede_html = f'<p class="am-lede">{lede}</p>' if lede else ""
-    st.markdown(f'<h1 class="am-h1">{titre}</h1>{lede_html}',
+    st.markdown(f'<h1 class="{cls}"{style}>{titre}</h1>{lede_html}',
                 unsafe_allow_html=True)
 
 
@@ -124,20 +157,24 @@ def metric(label, value, unit="", pill=None):
             f'<div class="am-value">{value}{u}</div>{p}</div>')
 
 
-def metrics_card(title, items, cols=2, small=False):
+def metrics_card(title, items, cols=2, small=False, accent=None):
     """Grille de métriques façon maquette — à utiliser dans un container."""
     cls = f"am-grid cols-{cols}" + (" sm" if small else "")
-    st.markdown(f'<div class="am-card-title">{title}</div>'
-                f'<div class="{cls}">{"".join(items)}</div>',
+    style = f' style="--acc:{accent}"' if accent else ""
+    st.markdown(f'<div class="am-wrap"{style}>'
+                f'<div class="am-card-title">{title}</div>'
+                f'<div class="{cls}">{"".join(items)}</div></div>',
                 unsafe_allow_html=True)
 
 
-def ratios_strip(pairs):
-    """Bandeau gris de grandeurs intermédiaires — pairs = [(label, val)]."""
+def ratios_strip(pairs, accent=None):
+    """Bandeau de grandeurs intermédiaires — pairs = [(label, val)]."""
     inner = "".join(f'<div class="am-ratio"><span class="am-rlabel">{l}</span>'
                     f'<span class="am-rvalue">{v}</span></div>'
                     for l, v in pairs)
-    st.markdown(f'<div class="am-ratios" style="grid-template-columns:'
+    cls = "am-ratios tinted" if accent else "am-ratios"
+    acc = f"--acc:{accent};" if accent else ""
+    st.markdown(f'<div class="{cls}" style="{acc}grid-template-columns:'
                 f'repeat({len(pairs)}, 1fr)">{inner}</div>',
                 unsafe_allow_html=True)
 
@@ -202,20 +239,37 @@ body {{ margin: 0; font-family: "Helvetica Neue", Helvetica, -apple-system,
          overflow: hidden; }}
 .hero video {{ position: absolute; inset: 0; width: 100%; height: 100%;
                object-fit: cover; }}
+/* double dégradé bleu nuit : bas → haut + gauche → droite */
 .hero .hero-shade {{ position: absolute; inset: 0; background:
-  linear-gradient(180deg, rgba(8,16,28,.10) 0%, rgba(8,16,28,.60) 100%); }}
-.hero .hero-text {{ position: absolute; left: 36px; bottom: 26px; color: #fff; }}
+  linear-gradient(0deg, rgba(9,21,38,.78) 0%, rgba(9,21,38,.28) 55%,
+                  rgba(9,21,38,.05) 100%),
+  linear-gradient(90deg, rgba(9,21,38,.55) 0%, rgba(9,21,38,0) 60%); }}
+.hero .hero-text {{ position: absolute; left: 36px; bottom: 24px; color: #fff; }}
+.hero .overline {{ font-size: 12px; font-weight: 700; letter-spacing: .12em;
+                   text-transform: uppercase; opacity: .85;
+                   margin-bottom: 6px; }}
 .hero .hero-text h1 {{ font-size: 46px; font-weight: 700; margin: 0;
                        letter-spacing: -.02em; line-height: 1.1; }}
-.hero .hero-text p {{ margin: 6px 0 0; font-size: 16px; opacity: .88; }}
+.hero .badges {{ display: flex; gap: 8px; margin-top: 14px; }}
+.hero .badge {{ font-size: 12.5px; font-weight: 600; padding: 4px 12px;
+                border-radius: 99px; background: rgba(255,255,255,.16);
+                border: 1px solid rgba(255,255,255,.28);
+                -webkit-backdrop-filter: blur(6px);
+                backdrop-filter: blur(6px); }}
 </style>
 <div class="hero">
   <video autoplay loop muted playsinline
          src="data:video/mp4;base64,{b64}"></video>
   <div class="hero-shade"></div>
   <div class="hero-text">
+    <div class="overline">MGA803 — Analyse et optimisation des performances
+    des avions</div>
     <h1>Airbus A380</h1>
-    <p>MGA803 — Analyse et optimisation des performances des avions · ÉTS, É2026</p>
+    <div class="badges">
+      <span class="badge">ÉTS · Été 2026</span>
+      <span class="badge">5 modules</span>
+      <span class="badge">Trent 970</span>
+    </div>
   </div>
 </div>
 <script>
@@ -233,6 +287,39 @@ body {{ margin: 0; font-family: "Helvetica Neue", Helvetica, -apple-system,
 
 
 # CSS scopé aux classes .mod-grid / .mod-card uniquement (cartes accueil)
+BG_IMG = ASSETS / "background-cockpit.jpg"
+
+# CSS scopé aux classes .mod-grid / .mod-card uniquement (cartes accueil)
+BG_IMG = ASSETS / "background-cockpit.jpg"
+
+# Pied de page accueil — horizon depuis le cockpit + signature du projet
+_FOOTER_HTML = """
+<style>
+.foot-hero { position: relative; height: 300px; border-radius: 12px;
+             overflow: hidden; margin-top: 18px; }
+.foot-hero img { position: absolute; inset: 0; width: 100%; height: 100%;
+                 object-fit: cover; }
+.foot-hero .foot-shade { position: absolute; inset: 0; background:
+  linear-gradient(0deg, rgba(9,21,38,.72) 0%, rgba(9,21,38,.15) 45%,
+                  rgba(9,21,38,.05) 100%); }
+.foot-hero .foot-text { position: absolute; left: 0; right: 0; bottom: 22px;
+                        text-align: center; color: #fff; }
+.foot-hero .foot-text .foot-authors { font-size: 15px; font-weight: 600; }
+.foot-hero .foot-text .foot-course { font-size: 12.5px; opacity: .82;
+                                     margin-top: 4px; }
+</style>
+<div class="foot-hero">
+  <img src="data:image/jpeg;base64,{b64}" alt="Horizon depuis le cockpit">
+  <div class="foot-shade"></div>
+  <div class="foot-text">
+    <div class="foot-authors">Rodrigue Fosing · Valentin Durand · Kevin Noah</div>
+    <div class="foot-course">MGA803 — Analyse et optimisation des performances
+    des avions · ÉTS · Été 2026</div>
+  </div>
+</div>
+"""
+
+
 _CARDS_CSS = """
 <style>
 .mod-grid { display: grid; grid-template-columns: repeat(2, 1fr);
@@ -241,13 +328,16 @@ _CARDS_CSS = """
             border: 1px solid #E4E8EE; border-radius: 12px;
             padding: 22px 26px; text-decoration: none !important;
             transition: border-color .15s, box-shadow .15s, transform .15s; }
-a.mod-card:hover { border-color: #1B3A5C; transform: translateY(-2px);
+a.mod-card:hover { border-color: var(--mc, #1B3A5C);
+                   transform: translateY(-2px);
                    box-shadow: 0 6px 18px rgba(16, 24, 40, .08); }
 .mod-card .mod-head { display: flex; justify-content: space-between;
                       align-items: center; }
 .mod-card .mod-num { font-family: ui-monospace, SFMono-Regular, monospace;
-                     font-size: 13px; font-weight: 600; color: #8B93A1; }
-.mod-card .mod-arrow { color: #5B6573; font-size: 19px; line-height: 1; }
+                     font-size: 13px; font-weight: 700;
+                     color: var(--mc, #8B93A1); }
+.mod-card .mod-arrow { color: var(--mc, #5B6573); font-size: 19px;
+                       line-height: 1; }
 .mod-card h3 { margin: 10px 0 8px; font-size: 22px; font-weight: 700;
                color: #1A2230; }
 .mod-card p { margin: 0; font-size: 14.5px; color: #5B6573;
@@ -291,14 +381,20 @@ def page_accueil():
         head = (f'<div class="mod-head"><span class="mod-num">{num}</span>'
                 f'<span class="mod-arrow">→</span></div>')
         body = f'{head}<h3>{nom}</h3><p>{desc}</p>'
+        mc = ACCENTS.get(nom, (NAVY, NAVY))[1]
         if dispo:
-            cards += (f'<a class="mod-card" target="_self" '
+            cards += (f'<a class="mod-card" style="--mc:{mc}" '
+                      f'target="_self" '
                       f'href="?page={quote(nom)}">{body}</a>')
         else:
-            cards += (f'<div class="mod-card off">{body}'
+            cards += (f'<div class="mod-card off" style="--mc:{mc}">'
+                      f'{body}'
                       f'<span class="mod-pill">À VENIR</span></div>')
     st.markdown(_CARDS_CSS + f'<div class="mod-grid">{cards}</div>',
                 unsafe_allow_html=True)
+
+    st.caption("Rodrigue Fosing · Valentin Durand · Kevin Noah — "
+               "MGA803 · ÉTS · Été 2026")
 
 
 def _h_from_slider():
@@ -313,7 +409,8 @@ def page_atm():
     page_head("Module atmosphérique — ISA",
               "Propriétés de l'air en fonction de l'altitude et de l'écart "
               "de température ΔISA. La pression n'est pas affectée par "
-              "ΔISA ; la masse volumique et la vitesse du son en découlent.")
+              "ΔISA ; la masse volumique et la vitesse du son en découlent.",
+              accent=ACCENTS["Atmosphère"][1])
 
     st.session_state.setdefault("atm_h_slider", 11700.0)
     st.session_state.setdefault("atm_h_input", 11700.0)
@@ -345,7 +442,7 @@ def page_atm():
             metric(f"Vitesse du son {sym('<i>a</i>')}",
                    f"{props['a']:.1f}", "m/s",
                    f"{props['a'] / KT:.0f} kt"),
-        ], cols=2)
+        ], cols=2, accent=ACCENTS["Atmosphère"][0])
 
     ratios_strip([
         (sym('<i>θ</i> = <i>T</i>/<i>T</i><sub>0</sub>'),
@@ -354,7 +451,7 @@ def page_atm():
          f"{props['delta']:.4f}"),
         (sym('<i>σ</i> = <i>ρ</i>/<i>ρ</i><sub>0</sub>'),
          f"{props['sigma']:.4f}"),
-    ])
+    ], accent=ACCENTS["Atmosphère"][0])
 
     hs = np.linspace(0.0, 20000.0, 201)
     profils = [
@@ -406,7 +503,8 @@ def page_atm():
 def page_conv():
     page_head("Module de conversion — TAS / CAS / Mach",
               "Conversions isentropiques entre vitesse vraie, vitesse "
-              "calibrée et nombre de Mach, basées sur l'atmosphère ISA.")
+              "calibrée et nombre de Mach, basées sur l'atmosphère ISA.",
+              accent=ACCENTS["Conversion"][1])
 
     convs = {
         "Mach → TAS": (mod_conv.mach_to_tas, "mach", "vitesse"),
@@ -450,7 +548,8 @@ def page_conv():
             autre = (f"{res:.2f} m/s" if unite == "kt"
                      else f"{res / KT:.2f} kt")
             items = [metric(choix, f"{res_aff:.2f}", unite, autre)]
-        metrics_card("Résultat", items, cols=1)
+        metrics_card("Résultat", items, cols=1,
+                     accent=ACCENTS["Conversion"][0])
 
     hs = np.linspace(0.0, 20000.0, 201)
     ys = np.array([float(f(x, hh, disa)) for hh in hs])
@@ -493,7 +592,8 @@ def page_aero():
     page_head("Module aérodynamique — A380",
               "Coefficients de portance, de traînée et de moment construits "
               "sur les données OpenVSP / VSPAERO — aile-fuselage, empennage "
-              "horizontal et avion complet.")
+              "horizontal et avion complet.",
+              accent=ACCENTS["Aérodynamique"][1])
 
     model = load_aero_model()
     grid = model['f_clwb']
@@ -532,7 +632,8 @@ def page_aero():
                 metric(sym('<i>C</i><sub>L</sub>'), f"{cl:.4f}"),
                 metric(sym('<i>C</i><sub>D</sub>'), f"{cd:.5f}"),
                 metric(sym('<i>C</i><sub>M</sub>'), f"{cm:.4f}"),
-            ], cols=3, small=True)
+            ], cols=3, small=True,
+                         accent=ACCENTS["Aérodynamique"][0])
 
     ratios_strip([
         (f"Downwash {sym('<i>ε</i>')}", f"{eps:.3f}°"),
@@ -541,7 +642,7 @@ def page_aero():
          f"{alpha - eps + dit:.3f}°"),
         (f"Finesse {sym('<i>C</i><sub>L,t</sub>/<i>C</i><sub>D,t</sub>')}",
          f"{cl_t / cd_t:.2f}" if cd_t else "—"),
-    ])
+    ], accent=ACCENTS["Aérodynamique"][0])
 
     tab1, tab2, tab3 = st.tabs(["Coefficients vs α", "Polaire", "Surface 3D"])
 
@@ -590,7 +691,7 @@ def page_aero():
     with tab3:
         coef = st.selectbox("Coefficient", ["CL_t", "CD_t", "CM_t"])
         a_s, m_s, z = aero_surface(coef, dit)
-        fig = go.Figure(go.Surface(x=m_s, y=a_s, z=z, colorscale="Viridis"))
+        fig = go.Figure(go.Surface(x=m_s, y=a_s, z=z, colorscale=SCALE_AERO))
         fig.update_layout(height=560, template="plotly_white", font=dict(family=FONT_UI),
                           scene=dict(xaxis_title="Mach",
                                      yaxis_title="α [deg]",
@@ -617,15 +718,16 @@ def page_aero():
                  r" + \frac{S_{ht}\,\bar z_{ht}}{S_{wb}\,\bar c_{wb}}"
                  r"\left(C_{L,ht}\sin\varepsilon + C_{D,ht}\cos\varepsilon"
                  r"\right)")
-        st.latex(r"\bar x_{ht} = x_{ht}\cos\alpha - z_{ht}\sin\alpha\qquad"
-                 r"\bar z_{ht} = z_{ht}\cos\alpha + x_{ht}\sin\alpha")
+        st.latex(r"\bar x_{ht} = x_{ht}\cos\alpha + z_{ht}\sin\alpha\qquad"
+                 r"\bar z_{ht} = z_{ht}\cos\alpha - x_{ht}\sin\alpha")
 
 
 def page_prop():
     page_head("Module de propulsion & émissions — Trent 970",
               "Poussée nette et débit carburant par polynômes de surface "
               "calibrés ; indices d'émission OACI généralisés aux conditions "
-              "de vol par la méthode Boeing Fuel Flow.")
+              "de vol par la méthode Boeing Fuel Flow.",
+              accent=ACCENTS["Propulsion & Émissions"][1])
 
     with st.container(border=True):
         c1, c2, c3, c4 = st.columns(4)
@@ -651,7 +753,8 @@ def page_prop():
             metric(sym('<i>W</i><sub>F,C</sub><sup>REF</sup>') + " (BFF)",
                    f"{ei['WF_C_REF']:.4f}", "kg/s",
                    "table OACI : 0.261 – 2.738"),
-        ], cols=3, small=True)
+        ], cols=3, small=True,
+            accent=ACCENTS["Propulsion & Émissions"][0])
 
     with st.container(border=True):
         metrics_card("Indices d'émission généralisés (méthode Boeing "
@@ -664,7 +767,8 @@ def page_prop():
                    f"{ei['EI_CO'] * wf:.3f} g/s"),
             metric(sym('EI<sub>CO₂</sub>'), f"{ei['EI_CO2']:.2f}", "kg/kg",
                    f"{ei['EI_CO2'] * wf:.3f} kg/s"),
-        ], cols=4, small=True)
+        ], cols=4, small=True,
+            accent=ACCENTS["Propulsion & Émissions"][0])
 
     ratios_strip([
         (sym('<i>N</i>1<sub>cor</sub> = <i>N</i>1/√<i>θ</i>'),
@@ -673,7 +777,7 @@ def page_prop():
              '(<i>δ</i>√<i>θ</i>)'),
          f"{wf / (delta * np.sqrt(theta)):.4f} kg/s"),
         (f"Humidité spécifique {sym('<i>ω</i>')}", f"{ei['omega']:.6f}"),
-    ])
+    ], accent=ACCENTS["Propulsion & Émissions"][0])
 
     with st.expander("Masses de polluants émises"):
         cc1, cc2 = st.columns(2)
@@ -689,7 +793,8 @@ def page_prop():
             metric("UHC", fr(em['m_UHC'] * n_mot / 1000, 3), "kg"),
             metric("CO", fr(em['m_CO'] * n_mot / 1000, 2), "kg"),
             metric("CO₂", fr(co2), "kg", f"{co2 / 1000:.2f} t"),
-        ], cols=5, small=True)
+        ], cols=5, small=True,
+            accent=ACCENTS["Propulsion & Émissions"][0])
 
     with st.expander("Formules du modèle (méthode Boeing Fuel Flow)"):
         st.latex(r"F_N = \bar f_{th}\!\left(\tfrac{N1}{\sqrt{\theta}},\,M"
@@ -730,6 +835,7 @@ def page_prop():
                                      showlegend=False), row=1, col=2)
         fig.update_xaxes(title_text="N1 [%]")
         fig.update_layout(height=440, template="plotly_white", font=dict(family=FONT_UI),
+                          colorway=APPLE_SEQ,
                           title=f"h = {h:.0f} m  |  ΔISA = {disa:+.0f} °C")
         st.plotly_chart(fig)
 
@@ -742,7 +848,7 @@ def page_prop():
         for col, (surf, nom) in zip((cc1, cc2),
                                     ((fn_surf, "FN"), (wf_surf, "WF [kg/s]"))):
             fig = go.Figure(go.Surface(x=N1g, y=Mg, z=surf,
-                                       colorscale="Viridis"))
+                                       colorscale=SCALE_PROP))
             fig.update_layout(height=480, template="plotly_white", font=dict(family=FONT_UI),
                               scene=dict(xaxis_title="N1 [%]",
                                          yaxis_title="Mach",
@@ -763,13 +869,15 @@ def page_prop():
                                          showlegend=(i == 1)), row=1, col=i)
         fig.update_xaxes(title_text="N1 [%]")
         fig.update_layout(height=440, template="plotly_white", font=dict(family=FONT_UI),
+                          colorway=APPLE_SEQ,
                           title=f"Indices d'émission — h = {h:.0f} m  |  "
                                 f"ΔISA = {disa:+.0f} °C")
         st.plotly_chart(fig)
 
 
 def page_trim():
-    page_head("Module d'équilibrage (Trim)")
+    page_head("Module d'équilibrage (Trim)",
+              accent=ACCENTS["Équilibrage (Trim)"][1])
     st.info("Module en développement — à venir : équilibrage longitudinal "
             "de l'avion à partir des modules aérodynamique et propulsion.")
 
@@ -791,6 +899,35 @@ PAGES = {
 def _img_b64(path, mtime):
     """Image encodée en base64 — mtime invalide le cache si le fichier change."""
     return base64.b64encode(Path(path).read_bytes()).decode()
+
+
+def apply_page_background():
+    """Image cockpit en fond de toutes les pages, sous un voile clair.
+
+    Les cartes passent en blanc translucide + flou (verre dépoli) pour
+    rester lisibles. CSS limité à des propriétés de fond — dégradation
+    sans risque si la structure DOM change.
+    """
+    if not BG_IMG.exists():
+        return
+    b64 = _img_b64(str(BG_IMG), BG_IMG.stat().st_mtime)
+    st.markdown(f"""
+    <style>
+    [data-testid="stAppViewContainer"] {{
+        background: linear-gradient(rgba(247, 249, 252, .86),
+                                    rgba(247, 249, 252, .86)),
+                    url("data:image/jpeg;base64,{b64}") center / cover
+                    no-repeat fixed;
+    }}
+    [data-testid="stHeader"] {{ background: transparent; }}
+    /* cartes en verre dépoli pour la lisibilité sur l'image */
+    [data-testid="stVerticalBlockBorderWrapper"] {{
+        background: rgba(255, 255, 255, .72);
+        -webkit-backdrop-filter: blur(10px);
+        backdrop-filter: blur(10px);
+    }}
+    </style>
+    """, unsafe_allow_html=True)
 
 
 def apply_sidebar_background():
@@ -865,6 +1002,7 @@ if "page" in st.query_params:
         st.session_state.nav = _cible
     st.query_params.clear()
 
+apply_page_background()
 apply_sidebar_background()
 st.sidebar.markdown("""
 <style>

@@ -2,6 +2,9 @@
 # Accent navy de l'identité visuelle (cartes accueil, sliders, radio)
 primaryColor = "#1B3A5C"
 
+# Coins arrondis façon Apple (boutons, inputs, containers)
+baseRadius = "12px"
+
 # Typographie Helvetica Neue (préférence utilisateur ; SF Pro en secours)
 font = "'Helvetica Neue', Helvetica, -apple-system, BlinkMacSystemFont, Arial, sans-serif"
 headingFont = "'Helvetica Neue', Helvetica, -apple-system, BlinkMacSystemFont, Arial, sans-serif"
