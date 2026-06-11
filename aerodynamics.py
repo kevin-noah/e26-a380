@@ -262,8 +262,6 @@ def get_cm_total(model, alpha, mach, delta_it=0.0):
            + (S_ht*z̄_ht / S_wb*c_wb) * (CD_ht*cos(ε) + CL_ht*sin(ε))
     avec x̄_ht = x_ht*cos(α) + z_ht*sin(α)
          z̄_ht = z_ht*cos(α) - x_ht*sin(α)
-    (bras du repère avion projetés en axes vent : x_ht positif vers
-    l'arrière, z_ht positif vers le haut)
     """
     eps_rad = np.radians(float(f_downwash(alpha)))
     cos_e   = np.cos(eps_rad)
