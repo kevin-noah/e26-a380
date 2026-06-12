@@ -124,6 +124,33 @@ st.markdown("""
 .am-ratios.tinted .am-rvalue { color: var(--acc); }
 .am-ratios.tinted .am-ratio + .am-ratio {
     border-left-color: color-mix(in srgb, var(--acc) 18%, white); }
+/* ---- Titre de module collant en haut au défilement ---- */
+[data-testid="stElementContainer"]:has(.am-sticky) {
+    position: sticky; top: 0; z-index: 100;
+}
+/* bandeau arrondi portant l'image du module (voile clair par-dessus) */
+.am-head { border-radius: 12px; border: 1px solid #E4E8EE;
+           padding: 14px 20px; background: rgba(255, 255, 255, .92);
+           -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.am-head .am-h1 { margin: 0; }
+/* ---- Téléphone : grilles resserrées, typo réduite, ratios empilés ---- */
+@media (max-width: 640px) {
+  .am-h1 { font-size: 26px; }
+  .am-lede { font-size: 14px; }
+  .am-grid.cols-3, .am-grid.cols-4, .am-grid.cols-5 {
+      grid-template-columns: repeat(2, 1fr); }
+  .am-grid > .am-metric { border-left: none !important;
+      border-top: 1px solid #EEF1F5; padding: 10px 8px 12px; }
+  .am-grid:not(.cols-1) > .am-metric:nth-child(2n) {
+      border-left: 1px solid #EEF1F5 !important; }
+  .am-grid:not(.cols-1) > .am-metric:nth-child(-n+2),
+  .am-grid.cols-1 > .am-metric:first-child { border-top: none; }
+  .am-value { font-size: 30px; }
+  .am-grid.sm .am-value { font-size: 22px; }
+  .am-ratios { grid-template-columns: 1fr !important; row-gap: 10px;
+      padding: 12px 16px; }
+  .am-ratio + .am-ratio { border-left: none; padding-left: 0; }
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -134,11 +161,27 @@ def fr(x, dec=0):
 
 
 def page_head(titre, lede="", accent=None):
+    # titre seul dans son bloc : son conteneur devient sticky (cf. CSS
+    # am-sticky), le lede défile normalement. Le bandeau am-head reprend
+    # l'image de la carte du module (le dégradé du h1 utilisant
+    # background-clip:text, l'image doit vivre sur le wrapper).
     cls = "am-h1 grad" if accent else "am-h1"
     style = f' style="--acc:{accent}"' if accent else ""
-    lede_html = f'<p class="am-lede">{lede}</p>' if lede else ""
-    st.markdown(f'<h1 class="{cls}"{style}>{titre}</h1>{lede_html}',
+    bg = ""
+    img = CARD_IMGS.get(st.session_state.get("nav", ""))
+    if img is not None and img.exists():
+        b64 = _img_b64(str(img), img.stat().st_mtime)
+        bg = (' style="background:'
+              'linear-gradient(rgba(255,255,255,.84), '
+              'rgba(255,255,255,.84)), '
+              f'url(data:image/jpeg;base64,{b64}) center / cover '
+              'no-repeat"')
+    st.markdown(f'<div class="am-head am-sticky"{bg}>'
+                f'<h1 class="{cls}"{style}>{titre}</h1></div>',
                 unsafe_allow_html=True)
+    if lede:
+        st.markdown(f'<p class="am-lede">{lede}</p>',
+                    unsafe_allow_html=True)
 
 
 def sym(expr):
@@ -256,6 +299,13 @@ body {{ margin: 0; font-family: "Helvetica Neue", Helvetica, -apple-system,
                 border: 1px solid rgba(255,255,255,.28);
                 -webkit-backdrop-filter: blur(6px);
                 backdrop-filter: blur(6px); }}
+/* téléphone : titre réduit, badges sur plusieurs lignes */
+@media (max-width: 640px) {{
+  .hero .hero-text {{ left: 18px; right: 18px; bottom: 16px; }}
+  .hero .hero-text h1 {{ font-size: 30px; }}
+  .hero .overline {{ font-size: 10.5px; }}
+  .hero .badges {{ flex-wrap: wrap; }}
+}}
 </style>
 <div class="hero">
   <video autoplay loop muted playsinline
@@ -286,11 +336,18 @@ body {{ margin: 0; font-family: "Helvetica Neue", Helvetica, -apple-system,
 """
 
 
-# CSS scopé aux classes .mod-grid / .mod-card uniquement (cartes accueil)
+# Fond global de page
 BG_IMG = ASSETS / "background-cockpit.jpg"
 
-# CSS scopé aux classes .mod-grid / .mod-card uniquement (cartes accueil)
-BG_IMG = ASSETS / "background-cockpit.jpg"
+# Images de fond des cartes modules de l'accueil (optionnelles : carte
+# blanche unie si le fichier manque)
+CARD_IMGS = {
+    "Atmosphère":             ASSETS / "card-atmosphere.jpg",
+    "Conversion":             ASSETS / "card-conversion.jpg",
+    "Aérodynamique":          ASSETS / "card-aerodynamique.jpg",
+    "Propulsion & Émissions": ASSETS / "card-propulsion.jpg",
+    "Équilibrage (Trim)":     ASSETS / "card-trim.jpg",
+}
 
 # Pied de page accueil — horizon depuis le cockpit + signature du projet
 _FOOTER_HTML = """
@@ -349,6 +406,11 @@ a.mod-card:hover { border-color: var(--mc, #1B3A5C);
                       background: #F4F6F9; border: 1px solid #E4E8EE;
                       border-radius: 99px; padding: 3px 10px; }
 @media (max-width: 900px) { .mod-grid { grid-template-columns: 1fr; } }
+@media (max-width: 640px) {
+  .mod-card { padding: 18px 20px; }
+  .mod-card h3 { font-size: 19px; }
+  .mod-card p { font-size: 13.5px; }
+}
 </style>
 """
 
@@ -382,12 +444,23 @@ def page_accueil():
                 f'<span class="mod-arrow">→</span></div>')
         body = f'{head}<h3>{nom}</h3><p>{desc}</p>'
         mc = ACCENTS.get(nom, (NAVY, NAVY))[1]
+        style = f"--mc:{mc}"
+        img = CARD_IMGS.get(nom)
+        if img is not None and img.exists():
+            b64i = _img_b64(str(img), img.stat().st_mtime)
+            # voile blanc dégradé : opaque côté texte, image visible à droite
+            style += (";background:"
+                      "linear-gradient(115deg, rgba(255,255,255,.97) 0%, "
+                      "rgba(255,255,255,.88) 52%, rgba(255,255,255,.45) "
+                      "100%), "
+                      f"url(data:image/jpeg;base64,{b64i}) center / cover "
+                      "no-repeat")
         if dispo:
-            cards += (f'<a class="mod-card" style="--mc:{mc}" '
+            cards += (f'<a class="mod-card" style="{style}" '
                       f'target="_self" '
                       f'href="?page={quote(nom)}">{body}</a>')
         else:
-            cards += (f'<div class="mod-card off" style="--mc:{mc}">'
+            cards += (f'<div class="mod-card off" style="{style}">'
                       f'{body}'
                       f'<span class="mod-pill">À VENIR</span></div>')
     st.markdown(_CARDS_CSS + f'<div class="mod-grid">{cards}</div>',
@@ -397,12 +470,54 @@ def page_accueil():
                "MGA803 · ÉTS · Été 2026")
 
 
-def _h_from_slider():
-    st.session_state.atm_h_input = st.session_state.atm_h_slider
+def _init_slider(key, valeur):
+    st.session_state.setdefault(f"{key}_slider", valeur)
 
 
-def _h_from_input():
-    st.session_state.atm_h_slider = st.session_state.atm_h_input
+def _appliquer_saisie(key, fac, lo, hi):
+    val = st.session_state[f"{key}_input"] * fac
+    st.session_state[f"{key}_slider"] = min(hi, max(lo, val))
+
+
+def ruban_saisie(cle):
+    """Toggle « Saisie directe » aligné à droite, caché par défaut.
+
+    Retourne (zone principale, zone ruban ou None si replié)."""
+    _, c_tog = st.columns([3.4, 1], vertical_alignment="center")
+    if c_tog.toggle("Saisie directe", key=cle):
+        return st.columns([2.6, 1], gap="medium")
+    return st.container(), None
+
+
+def carte_saisie(champs):
+    """Carte du ruban : un number_input par champ, synchronisé au slider
+    homonyme (le slider, en unités SI, reste la référence ; le champ est
+    redérivé à chaque rendu). champs : liste de
+    (label, min_SI, max_SI, step | unites, base_key) où unites est un dict
+    {unité: (facteur_vers_SI, pas)} — la première unité est celle par défaut.
+    """
+    with st.container(border=True, height="stretch"):
+        st.markdown('<div class="am-card-title">Saisie directe</div>',
+                    unsafe_allow_html=True)
+        for label, lo, hi, quatrieme, key in champs:
+            unites = quatrieme if isinstance(quatrieme, dict) else None
+            if unites:
+                st.session_state.setdefault(f"{key}_unite",
+                                            next(iter(unites)))
+                u = st.session_state[f"{key}_unite"]
+                fac, step = unites[u]
+                label = f"{label} [{u}]"
+            else:
+                fac, step = 1.0, quatrieme
+            st.session_state[f"{key}_input"] = (
+                float(st.session_state[f"{key}_slider"]) / fac)
+            st.number_input(label, lo / fac, hi / fac, step=step,
+                            key=f"{key}_input",
+                            on_change=_appliquer_saisie,
+                            args=(key, fac, lo, hi))
+            if unites:
+                st.radio("Unité", list(unites), key=f"{key}_unite",
+                         horizontal=True, label_visibility="collapsed")
 
 
 def page_atm():
@@ -412,21 +527,30 @@ def page_atm():
               "ΔISA ; la masse volumique et la vitesse du son en découlent.",
               accent=ACCENTS["Atmosphère"][1])
 
-    st.session_state.setdefault("atm_h_slider", 11700.0)
-    st.session_state.setdefault("atm_h_input", 11700.0)
+    _init_slider("atm_h", 11700.0)
+    _init_slider("atm_disa", 0.0)
 
-    with st.container(border=True):
-        c1, c2 = st.columns([2.8, 1], vertical_alignment="bottom")
-        c1.slider(r"Altitude $h$ [m]", 0.0, 20000.0, step=50.0,
-                  key="atm_h_slider", on_change=_h_from_slider)
-        c2.number_input("Saisie directe [m]", 0.0, 20000.0, step=100.0,
-                        key="atm_h_input", on_change=_h_from_input)
-        h = float(st.session_state.atm_h_slider)
-        c1.caption(f"≈ {fr(h / FT)} ft")
-        disa = st.slider(r"Écart $\Delta_{ISA}$ [°C]", -30.0, 30.0, 0.0, 1.0)
-        st.caption("plus froid que standard" if disa < 0 else
-                   "plus chaud que standard" if disa > 0 else
-                   "atmosphère standard")
+    c_main, c_panel = ruban_saisie("atm_ruban")
+    with c_main:
+        with st.container(border=True,
+                          height="stretch" if c_panel is not None else "content"):
+            st.slider(r"Altitude $h$ [m]", 0.0, 20000.0, step=50.0,
+                      key="atm_h_slider")
+            h = float(st.session_state.atm_h_slider)
+            st.caption(f"≈ {fr(h / FT)} ft")
+            st.slider(r"Écart $\Delta_{ISA}$ [°C]", -30.0, 30.0, step=1.0,
+                      key="atm_disa_slider")
+            disa = float(st.session_state.atm_disa_slider)
+            st.caption("plus froid que standard" if disa < 0 else
+                       "plus chaud que standard" if disa > 0 else
+                       "atmosphère standard")
+    if c_panel is not None:
+        with c_panel:
+            carte_saisie([
+                (r"Altitude $h$", 0.0, 20000.0,
+                 {"m": (1.0, 100.0), "ft": (FT, 500.0)}, "atm_h"),
+                (r"Écart $\Delta_{ISA}$ [°C]", -30.0, 30.0, 1.0, "atm_disa"),
+            ])
 
     props = mod_atm.atmosphere(h, disa)
 
@@ -515,27 +639,44 @@ def page_conv():
         "CAS → TAS": (mod_conv.cas_to_tas, "vitesse", "vitesse"),
     }
 
-    with st.container(border=True):
-        c1, c2 = st.columns([1, 2])
-        choix = c1.radio("Conversion", list(convs))
-        f, kind_in, kind_out = convs[choix]
+    _init_slider("conv_h", 10000.0)
+    _init_slider("conv_disa", 0.0)
 
-        with c2:
-            cc1, cc2 = st.columns(2)
-            if kind_in == "mach":
-                val_in = cc1.number_input("Mach", 0.0, 1.0, 0.85, 0.01)
-                x = val_in
-                unite = cc2.radio("Unité de sortie", ["kt", "m/s"],
-                                  horizontal=True)
-            else:
-                unite = cc2.radio("Unité d'entrée/sortie", ["kt", "m/s"],
-                                  horizontal=True)
-                val_in = cc1.number_input(f"Vitesse [{unite}]", 0.0, 1200.0,
-                                          300.0, 1.0)
-                x = val_in * KT if unite == "kt" else val_in
-            cc3, cc4 = st.columns(2)
-            h = cc3.slider("Altitude h [m]", 0.0, 20000.0, 10000.0, 50.0)
-            disa = cc4.slider("ΔISA [°C]", -30.0, 30.0, 0.0, 1.0)
+    c_main, c_panel = ruban_saisie("conv_ruban")
+    with c_main:
+        with st.container(border=True,
+                          height="stretch" if c_panel is not None else "content"):
+            c1, c2 = st.columns([1, 2])
+            choix = c1.radio("Conversion", list(convs))
+            f, kind_in, kind_out = convs[choix]
+
+            with c2:
+                cc1, cc2 = st.columns(2)
+                if kind_in == "mach":
+                    val_in = cc1.number_input("Mach", 0.0, 1.0, 0.85, 0.01)
+                    x = val_in
+                    unite = cc2.radio("Unité de sortie", ["kt", "m/s"],
+                                      horizontal=True)
+                else:
+                    unite = cc2.radio("Unité d'entrée/sortie", ["kt", "m/s"],
+                                      horizontal=True)
+                    val_in = cc1.number_input(f"Vitesse [{unite}]", 0.0,
+                                              1200.0, 300.0, 1.0)
+                    x = val_in * KT if unite == "kt" else val_in
+                cc3, cc4 = st.columns(2)
+                cc3.slider("Altitude h [m]", 0.0, 20000.0, step=50.0,
+                           key="conv_h_slider")
+                cc4.slider("ΔISA [°C]", -30.0, 30.0, step=1.0,
+                           key="conv_disa_slider")
+                h = float(st.session_state.conv_h_slider)
+                disa = float(st.session_state.conv_disa_slider)
+    if c_panel is not None:
+        with c_panel:
+            carte_saisie([
+                ("Altitude h", 0.0, 20000.0,
+                 {"m": (1.0, 100.0), "ft": (FT, 500.0)}, "conv_h"),
+                ("ΔISA [°C]", -30.0, 30.0, 1.0, "conv_disa"),
+            ])
 
     res = float(f(x, h, disa))
     with st.container(border=True):
@@ -600,13 +741,31 @@ def page_aero():
     a_min, a_max = float(grid['x_alpha'][0]), float(grid['x_alpha'][-1])
     m_min, m_max = float(grid['y_mach'][0]), float(grid['y_mach'][-1])
 
-    with st.container(border=True):
-        c1, c2, c3 = st.columns(3)
-        alpha = c1.slider(r"Angle d'attaque $\alpha$ [deg]",
-                          a_min, a_max, 2.0, 0.1)
-        mach = c2.slider(r"Mach $M$", m_min, m_max, min(0.85, m_max), 0.01)
-        dit = c3.slider(r"Calage empennage $\delta_{it}$ [deg]",
-                        -10.0, 10.0, 0.0, 0.5)
+    _init_slider("aero_alpha", 2.0)
+    _init_slider("aero_mach", min(0.85, m_max))
+    _init_slider("aero_dit", 0.0)
+
+    c_main, c_panel = ruban_saisie("aero_ruban")
+    with c_main:
+        with st.container(border=True,
+                          height="stretch" if c_panel is not None else "content"):
+            c1, c2, c3 = st.columns(3)
+            c1.slider(r"Angle d'attaque $\alpha$ [deg]", a_min, a_max,
+                      step=0.1, key="aero_alpha_slider")
+            c2.slider(r"Mach $M$", m_min, m_max, step=0.01,
+                      key="aero_mach_slider")
+            c3.slider(r"Calage empennage $\delta_{it}$ [deg]", -10.0, 10.0,
+                      step=0.5, key="aero_dit_slider")
+            alpha = float(st.session_state.aero_alpha_slider)
+            mach = float(st.session_state.aero_mach_slider)
+            dit = float(st.session_state.aero_dit_slider)
+    if c_panel is not None:
+        with c_panel:
+            carte_saisie([
+                (r"$\alpha$ [deg]", a_min, a_max, 0.1, "aero_alpha"),
+                (r"Mach $M$", m_min, m_max, 0.01, "aero_mach"),
+                (r"$\delta_{it}$ [deg]", -10.0, 10.0, 0.5, "aero_dit"),
+            ])
 
     eps = float(mod_aero.f_downwash(alpha))
 
@@ -729,12 +888,37 @@ def page_prop():
               "de vol par la méthode Boeing Fuel Flow.",
               accent=ACCENTS["Propulsion & Émissions"][1])
 
-    with st.container(border=True):
-        c1, c2, c3, c4 = st.columns(4)
-        n1 = c1.slider(r"Fan speed $N1$ [%]", 60.0, 100.0, 90.0, 0.5)
-        mach = c2.slider(r"Mach $M$", 0.0, 0.85, 0.85, 0.01)
-        h = c3.slider(r"Altitude $h$ [m]", 0.0, 15000.0, 10668.0, 50.0)
-        disa = c4.slider(r"$\Delta_{ISA}$ [°C]", -30.0, 30.0, 0.0, 1.0)
+    _init_slider("prop_n1", 90.0)
+    _init_slider("prop_mach", 0.85)
+    _init_slider("prop_h", 10668.0)
+    _init_slider("prop_disa", 0.0)
+
+    c_main, c_panel = ruban_saisie("prop_ruban")
+    with c_main:
+        with st.container(border=True,
+                          height="stretch" if c_panel is not None else "content"):
+            c1, c2 = st.columns(2)
+            c1.slider(r"Fan speed $N1$ [%]", 60.0, 100.0, step=0.5,
+                      key="prop_n1_slider")
+            c2.slider(r"Mach $M$", 0.0, 0.85, step=0.01,
+                      key="prop_mach_slider")
+            c1.slider(r"Altitude $h$ [m]", 0.0, 15000.0, step=50.0,
+                      key="prop_h_slider")
+            c2.slider(r"$\Delta_{ISA}$ [°C]", -30.0, 30.0, step=1.0,
+                      key="prop_disa_slider")
+            n1 = float(st.session_state.prop_n1_slider)
+            mach = float(st.session_state.prop_mach_slider)
+            h = float(st.session_state.prop_h_slider)
+            disa = float(st.session_state.prop_disa_slider)
+    if c_panel is not None:
+        with c_panel:
+            carte_saisie([
+                (r"$N1$ [%]", 60.0, 100.0, 0.5, "prop_n1"),
+                (r"Mach $M$", 0.0, 0.85, 0.01, "prop_mach"),
+                (r"Altitude $h$", 0.0, 15000.0,
+                 {"m": (1.0, 100.0), "ft": (FT, 500.0)}, "prop_h"),
+                (r"$\Delta_{ISA}$ [°C]", -30.0, 30.0, 1.0, "prop_disa"),
+            ])
 
     fn = float(mod_prop.get_thrust(n1, mach, h, disa))
     ei = mod_prop.get_emission_indices(n1, mach, h, disa)
@@ -911,20 +1095,22 @@ def apply_page_background():
     if not BG_IMG.exists():
         return
     b64 = _img_b64(str(BG_IMG), BG_IMG.stat().st_mtime)
+    # image bien présente à l'accueil, simple filigrane dans les modules
+    voile = .60 if st.session_state.get("nav", "Accueil") == "Accueil" else .90
     st.markdown(f"""
     <style>
     [data-testid="stAppViewContainer"] {{
-        background: linear-gradient(rgba(247, 249, 252, .86),
-                                    rgba(247, 249, 252, .86)),
+        background: linear-gradient(rgba(247, 249, 252, {voile}),
+                                    rgba(247, 249, 252, {voile})),
                     url("data:image/jpeg;base64,{b64}") center / cover
                     no-repeat fixed;
     }}
     [data-testid="stHeader"] {{ background: transparent; }}
     /* cartes en verre dépoli pour la lisibilité sur l'image */
     [data-testid="stVerticalBlockBorderWrapper"] {{
-        background: rgba(255, 255, 255, .72);
-        -webkit-backdrop-filter: blur(10px);
-        backdrop-filter: blur(10px);
+        background: rgba(255, 255, 255, .95);
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -940,6 +1126,9 @@ def apply_sidebar_background():
     if not SIDEBAR_IMG.exists():
         return
     b64 = _img_b64(str(SIDEBAR_IMG), SIDEBAR_IMG.stat().st_mtime)
+    # pastille de l'item actif : dégradé aux couleurs du module sélectionné
+    fonce, vif = ACCENTS.get(st.session_state.get("nav", "Accueil"),
+                             (NAVY, "#3E6B99"))
     st.markdown(f"""
     <style>
     [data-testid="stSidebar"] {{
@@ -969,7 +1158,7 @@ def apply_sidebar_background():
         background: rgba(255, 255, 255, .08);
     }}
     [data-testid="stSidebar"] label[data-baseweb="radio"]:has(input:checked) {{
-        background: rgba(255, 255, 255, .16);
+        background: linear-gradient(135deg, {fonce}, {vif});
     }}
     [data-testid="stSidebar"] [role="radiogroup"] p {{
         font-size: 14.5px; font-weight: 600;
