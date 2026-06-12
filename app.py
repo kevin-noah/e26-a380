@@ -40,6 +40,10 @@ ACCENTS = {
 # Courbes multi-séries (Mach) — couleurs système Apple
 APPLE_SEQ = ["#0A84FF", "#30D158", "#FF9F0A", "#BF5AF2", "#FF375F", "#64D2FF"]
 
+# Graphes : barre d'outils Plotly masquée (rendu présentation, le zoom et
+# le survol restent actifs)
+PLOTLY_CONF = {"displayModeBar": False}
+
 # Échelles des surfaces 3D, assorties à la couleur du module
 SCALE_AERO = [[0.0, "#F2FBF5"], [0.5, "#30D158"], [1.0, "#0B3D1B"]]
 SCALE_PROP = [[0.0, "#FFF6EA"], [0.5, "#FF9F0A"], [1.0, "#6B3A00"]]
@@ -588,7 +592,8 @@ def page_atm():
                         subplot_titles=[p[0] for p in profils])
     for i, (_, vals, cur) in enumerate(profils, start=1):
         fig.add_trace(go.Scatter(x=vals, y=hs, mode="lines",
-                                 line=dict(color=NAVY, width=2),
+                                 line=dict(color=ACCENTS["Atmosphère"][0],
+                                           width=2),
                                  showlegend=False), row=1, col=i)
         fig.add_trace(go.Scatter(x=[cur], y=[h], mode="markers",
                                  marker=dict(color=RED, size=22, opacity=.15),
@@ -597,6 +602,14 @@ def page_atm():
         fig.add_trace(go.Scatter(x=[cur], y=[h], mode="markers",
                                  marker=dict(color=RED, size=9),
                                  showlegend=False), row=1, col=i)
+    fig.add_hline(y=mod_atm.H_TROPO, line_dash="dot", line_width=1.5,
+                  line_color="#8B93A1", row="all", col="all")
+    fig.add_annotation(text="Tropopause — 11 000 m", x=0.04,
+                       xref="x domain", xanchor="left",
+                       y=mod_atm.H_TROPO, yanchor="bottom", yshift=3,
+                       showarrow=False,
+                       font=dict(size=11, color="#8B93A1"),
+                       row=1, col=1)
     fig.update_yaxes(title_text="h [m]", row=1, col=1)
     fig.update_layout(height=420, template="plotly_white", font=dict(family=FONT_UI),
                       margin=dict(t=40, b=40))
@@ -604,7 +617,7 @@ def page_atm():
         st.markdown('<div class="am-card-title">Profils atmosphériques '
                     '0 – 20 km</div>', unsafe_allow_html=True)
         st.caption(f"ΔISA = {disa:+.0f} °C · point courant à {fr(h)} m")
-        st.plotly_chart(fig)
+        st.plotly_chart(fig, config=PLOTLY_CONF)
 
     with st.expander("Altitude à partir de la pression"):
         p_query = st.number_input(r"Pression $P$ [Pa]", 5000.0, 110000.0,
@@ -700,7 +713,8 @@ def page_conv():
     cur = res if kind_out == "mach" else (res / KT if unite == "kt" else res)
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=ys, y=hs, mode="lines",
-                             line=dict(color=NAVY, width=2),
+                             line=dict(color=ACCENTS["Conversion"][0],
+                                       width=2),
                              showlegend=False))
     fig.add_trace(go.Scatter(x=[cur], y=[h], mode="markers",
                              marker=dict(color=RED, size=22, opacity=.15),
@@ -717,7 +731,7 @@ def page_conv():
         st.caption(f"Entrée constante : {val_in:g} "
                    f"{'Mach' if kind_in == 'mach' else unite} · "
                    f"ΔISA = {disa:+.0f} °C")
-        st.plotly_chart(fig)
+        st.plotly_chart(fig, config=PLOTLY_CONF)
 
     with st.expander("Formules de conversion"):
         st.latex(r"V_{TAS} = M\,a_0\sqrt{\theta}")
@@ -815,7 +829,9 @@ def page_aero():
             fig.add_trace(go.Scatter(x=alphas, y=curves[f'{key}_t'],
                                      name="total", legendgroup="t",
                                      showlegend=(i == 1),
-                                     line=dict(color=NAVY, width=2)),
+                                     line=dict(
+                                         color=ACCENTS["Aérodynamique"][0],
+                                         width=2)),
                           row=1, col=i)
             fig.add_trace(go.Scatter(x=alphas, y=curves[f'{key}_wb'],
                                      name="WB seul", legendgroup="wb",
@@ -830,12 +846,15 @@ def page_aero():
         fig.update_layout(height=420, template="plotly_white", font=dict(family=FONT_UI),
                           title=f"Coefficients totaux — M = {mach:.2f}, "
                                 f"δ_it = {dit:+.1f}°")
-        st.plotly_chart(fig)
+        st.plotly_chart(fig, config=PLOTLY_CONF)
 
     with tab2:
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=curves['cd_t'], y=curves['cl_t'],
-                                 mode="lines", line=dict(color=NAVY, width=2),
+                                 mode="lines",
+                                 line=dict(
+                                     color=ACCENTS["Aérodynamique"][0],
+                                     width=2),
                                  showlegend=False))
         fig.add_trace(go.Scatter(x=[rows[2][2]], y=[rows[2][1]],
                                  mode="markers",
@@ -845,7 +864,7 @@ def page_aero():
                           xaxis_title="CD_t", yaxis_title="CL_t",
                           title=f"Polaire avion complet — M = {mach:.2f}, "
                                 f"δ_it = {dit:+.1f}°")
-        st.plotly_chart(fig)
+        st.plotly_chart(fig, config=PLOTLY_CONF)
 
     with tab3:
         coef = st.selectbox("Coefficient", ["CL_t", "CD_t", "CM_t"])
@@ -856,7 +875,7 @@ def page_aero():
                                      yaxis_title="α [deg]",
                                      zaxis_title=coef),
                           title=f"{coef}(α, M) — δ_it = {dit:+.1f}°")
-        st.plotly_chart(fig)
+        st.plotly_chart(fig, config=PLOTLY_CONF)
 
     with st.expander("Formules du modèle"):
         st.latex(r"\varepsilon = \varepsilon_0 + \varepsilon_\alpha\,\alpha"
@@ -1021,7 +1040,7 @@ def page_prop():
         fig.update_layout(height=440, template="plotly_white", font=dict(family=FONT_UI),
                           colorway=APPLE_SEQ,
                           title=f"h = {h:.0f} m  |  ΔISA = {disa:+.0f} °C")
-        st.plotly_chart(fig)
+        st.plotly_chart(fig, config=PLOTLY_CONF)
 
     with tab2:
         machs_3d = np.linspace(0.0, 0.85, 40)
@@ -1038,7 +1057,7 @@ def page_prop():
                                          yaxis_title="Mach",
                                          zaxis_title=nom),
                               title=nom)
-            col.plotly_chart(fig)
+            col.plotly_chart(fig, config=PLOTLY_CONF)
 
     with tab3:
         fig = make_subplots(rows=1, cols=3,
@@ -1056,7 +1075,7 @@ def page_prop():
                           colorway=APPLE_SEQ,
                           title=f"Indices d'émission — h = {h:.0f} m  |  "
                                 f"ΔISA = {disa:+.0f} °C")
-        st.plotly_chart(fig)
+        st.plotly_chart(fig, config=PLOTLY_CONF)
 
 
 def page_trim():
