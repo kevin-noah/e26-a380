@@ -44,9 +44,16 @@ APPLE_SEQ = ["#0A84FF", "#30D158", "#FF9F0A", "#BF5AF2", "#FF375F", "#64D2FF"]
 # le survol restent actifs)
 PLOTLY_CONF = {"displayModeBar": False}
 
-# Échelles des surfaces 3D, assorties à la couleur du module
-SCALE_AERO = [[0.0, "#F2FBF5"], [0.5, "#30D158"], [1.0, "#0B3D1B"]]
-SCALE_PROP = [[0.0, "#FFF6EA"], [0.5, "#FF9F0A"], [1.0, "#6B3A00"]]
+# Échelle commune des surfaces 3D : parcourt les accents vifs des quatre
+# modules (ATM bleu → CONV violet → AERO vert → PROP orange), pour lier
+# le relief aux couleurs de l'ensemble du projet plutôt qu'à un dégradé
+# monochrome. Partagée par les pages Aérodynamique et Propulsion.
+SCALE_MODULES = [
+    [0.00, "#0A84FF"],   # ATM  — bleu
+    [0.33, "#BF5AF2"],   # CONV — violet
+    [0.67, "#30D158"],   # AERO — vert
+    [1.00, "#FF9F0A"],   # PROP — orange
+]
 
 # Piles de polices : Helvetica Neue en premier (préférence utilisateur),
 # SF Mono pour les chiffres
@@ -946,7 +953,7 @@ def page_aero():
                  "CL_wb": rows[0][1], "CD_wb": rows[0][2], "CM_wb": rows[0][3],
                  "CL_ht": rows[1][1], "CD_ht": rows[1][2],
                  "CM_ht": rows[1][3]}[coef]
-        fig = go.Figure(go.Surface(x=m_s, y=a_s, z=z, colorscale=SCALE_AERO,
+        fig = go.Figure(go.Surface(x=m_s, y=a_s, z=z, colorscale=SCALE_MODULES,
                                    hovertemplate="Mach : %{x:.2f}<br>"
                                                  "α : %{y:.2f}°<br>"
                                                  f"{coef} : %{{z:.4f}}"
@@ -1161,7 +1168,7 @@ def page_prop():
                 (cc1, cc2),
                 ((fn_surf, "FN", fn), (wf_surf, "WF [kg/s]", wf))):
             fig = go.Figure(go.Surface(x=N1g, y=Mg, z=surf,
-                                       colorscale=SCALE_PROP,
+                                       colorscale=SCALE_MODULES,
                                        hovertemplate="N1 : %{x:.1f} %<br>"
                                                      "Mach : %{y:.2f}<br>"
                                                      f"{nom} : %{{z:.4f}}"
