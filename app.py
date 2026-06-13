@@ -582,26 +582,43 @@ def page_atm():
     ], accent=ACCENTS["Atmosphère"][0])
 
     hs = np.linspace(0.0, 20000.0, 201)
+    # (nom, unité, profil, valeur courante, texte de l'étiquette)
     profils = [
-        ("T [K]", mod_atm.temperature(hs, disa), props['T']),
-        ("P [Pa]", mod_atm.pressure(hs, disa), props['P']),
-        ("ρ [kg/m³]", mod_atm.density(hs, disa), props['rho']),
-        ("a [m/s]", mod_atm.speed_of_sound(hs, disa), props['a']),
+        ("Température T", "K", mod_atm.temperature(hs, disa), props['T'],
+         f"{props['T']:.1f}"),
+        ("Pression P", "Pa", mod_atm.pressure(hs, disa), props['P'],
+         fr(props['P'])),
+        ("Masse volumique ρ", "kg/m³", mod_atm.density(hs, disa), props['rho'],
+         f"{props['rho']:.4f}"),
+        ("Vitesse du son a", "m/s", mod_atm.speed_of_sound(hs, disa),
+         props['a'], f"{props['a']:.1f}"),
     ]
-    fig = make_subplots(rows=1, cols=4, shared_yaxes=True,
-                        subplot_titles=[p[0] for p in profils])
-    for i, (_, vals, cur) in enumerate(profils, start=1):
+    fig = make_subplots(rows=2, cols=2,
+                        subplot_titles=[f"{p[0]} [{p[1]}]" for p in profils],
+                        horizontal_spacing=0.12, vertical_spacing=0.13)
+    for i, (nom, unit, vals, cur, cur_txt) in enumerate(profils):
+        row, col = i // 2 + 1, i % 2 + 1
         fig.add_trace(go.Scatter(x=vals, y=hs, mode="lines",
                                  line=dict(color=ACCENTS["Atmosphère"][0],
                                            width=2),
-                                 showlegend=False), row=1, col=i)
+                                 showlegend=False,
+                                 hovertemplate=f"{nom} : %{{x:.4g}} {unit}"
+                                               f"<br>h : %{{y:,.0f}} m"
+                                               f"<extra></extra>"),
+                      row=row, col=col)
         fig.add_trace(go.Scatter(x=[cur], y=[h], mode="markers",
                                  marker=dict(color=RED, size=22, opacity=.15),
                                  showlegend=False, hoverinfo="skip"),
-                      row=1, col=i)
-        fig.add_trace(go.Scatter(x=[cur], y=[h], mode="markers",
+                      row=row, col=col)
+        fig.add_trace(go.Scatter(x=[cur], y=[h], mode="markers+text",
                                  marker=dict(color=RED, size=9),
-                                 showlegend=False), row=1, col=i)
+                                 text=[f" {cur_txt} {unit}"],
+                                 textposition="middle right",
+                                 textfont=dict(color=RED, size=12.5,
+                                               family=FONT_MONO),
+                                 cliponaxis=False,
+                                 showlegend=False, hoverinfo="skip"),
+                      row=row, col=col)
     fig.add_hline(y=mod_atm.H_TROPO, line_dash="dot", line_width=1.5,
                   line_color="#8B93A1", row="all", col="all")
     fig.add_annotation(text="Tropopause — 11 000 m", x=0.04,
@@ -610,9 +627,9 @@ def page_atm():
                        showarrow=False,
                        font=dict(size=11, color="#8B93A1"),
                        row=1, col=1)
-    fig.update_yaxes(title_text="h [m]", row=1, col=1)
-    fig.update_layout(height=420, template="plotly_white", font=dict(family=FONT_UI),
-                      margin=dict(t=40, b=40))
+    fig.update_yaxes(title_text="h [m]", col=1)
+    fig.update_layout(height=640, template="plotly_white",
+                      font=dict(family=FONT_UI), margin=dict(t=40, b=40))
     with st.container(border=True):
         st.markdown('<div class="am-card-title">Profils atmosphériques '
                     '0 – 20 km</div>', unsafe_allow_html=True)
@@ -711,17 +728,25 @@ def page_conv():
         ys = ys / KT
     y_label = "Mach" if kind_out == "mach" else f"Vitesse [{unite}]"
     cur = res if kind_out == "mach" else (res / KT if unite == "kt" else res)
+    cur_txt = f"{cur:.4f}" if kind_out == "mach" else f"{cur:.1f} {unite}"
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=ys, y=hs, mode="lines",
                              line=dict(color=ACCENTS["Conversion"][0],
                                        width=2),
-                             showlegend=False))
+                             showlegend=False,
+                             hovertemplate=f"{y_label} : %{{x:.4g}}"
+                                           f"<br>h : %{{y:,.0f}} m"
+                                           f"<extra></extra>"))
     fig.add_trace(go.Scatter(x=[cur], y=[h], mode="markers",
                              marker=dict(color=RED, size=22, opacity=.15),
                              showlegend=False, hoverinfo="skip"))
-    fig.add_trace(go.Scatter(x=[cur], y=[h], mode="markers",
+    fig.add_trace(go.Scatter(x=[cur], y=[h], mode="markers+text",
                              marker=dict(color=RED, size=9),
-                             showlegend=False))
+                             text=[f" {cur_txt}"], textposition="middle right",
+                             textfont=dict(color=RED, size=12.5,
+                                           family=FONT_MONO),
+                             cliponaxis=False,
+                             showlegend=False, hoverinfo="skip"))
     fig.update_layout(height=420, template="plotly_white", font=dict(family=FONT_UI),
                       xaxis_title=y_label, yaxis_title="h [m]",
                       margin=dict(t=40, b=40))
@@ -826,22 +851,36 @@ def page_aero():
         fig = make_subplots(rows=1, cols=3,
                             subplot_titles=("CL", "CD", "CM"))
         for i, key in enumerate(("cl", "cd", "cm"), start=1):
+            cname = key.upper()
             fig.add_trace(go.Scatter(x=alphas, y=curves[f'{key}_t'],
                                      name="total", legendgroup="t",
                                      showlegend=(i == 1),
                                      line=dict(
                                          color=ACCENTS["Aérodynamique"][0],
-                                         width=2)),
+                                         width=2),
+                                     hovertemplate=f"α : %{{x:.2f}}°<br>"
+                                                   f"{cname} total : %{{y:.4f}}"
+                                                   f"<extra></extra>"),
                           row=1, col=i)
             fig.add_trace(go.Scatter(x=alphas, y=curves[f'{key}_wb'],
                                      name="WB seul", legendgroup="wb",
                                      showlegend=(i == 1),
-                                     line=dict(color="#8B93A1", dash="dash")),
+                                     line=dict(color="#8B93A1", dash="dash"),
+                                     hovertemplate=f"α : %{{x:.2f}}°<br>"
+                                                   f"{cname} WB : %{{y:.4f}}"
+                                                   f"<extra></extra>"),
                           row=1, col=i)
             cur = {"cl": rows[2][1], "cd": rows[2][2], "cm": rows[2][3]}[key]
-            fig.add_trace(go.Scatter(x=[alpha], y=[cur], mode="markers",
+            fmt = ".5f" if key == "cd" else ".4f"
+            fig.add_trace(go.Scatter(x=[alpha], y=[cur], mode="markers+text",
                                      marker=dict(color=RED, size=9),
-                                     showlegend=False), row=1, col=i)
+                                     text=[f" {cur:{fmt}}"],
+                                     textposition="middle right",
+                                     textfont=dict(color=RED, size=11.5,
+                                                   family=FONT_MONO),
+                                     cliponaxis=False,
+                                     showlegend=False, hoverinfo="skip"),
+                          row=1, col=i)
         fig.update_xaxes(title_text="α [deg]")
         fig.update_layout(height=420, template="plotly_white", font=dict(family=FONT_UI),
                           title=f"Coefficients totaux — M = {mach:.2f}, "
@@ -849,17 +888,44 @@ def page_aero():
         st.plotly_chart(fig, config=PLOTLY_CONF)
 
     with tab2:
+        cl_arr = np.array(curves['cl_t'])
+        cd_arr = np.array(curves['cd_t'])
+        with np.errstate(divide="ignore", invalid="ignore"):
+            fin = np.where(cd_arr > 0, cl_arr / cd_arr, -np.inf)
+        idx = int(np.argmax(fin))
+        cl_opt, cd_opt, fin_opt = cl_arr[idx], cd_arr[idx], fin[idx]
+        acc_vif = ACCENTS["Aérodynamique"][1]
         fig = go.Figure()
+        # tangente depuis l'origine : sa pente est la finesse maximale
+        fig.add_trace(go.Scatter(x=[0, cd_opt * 1.12], y=[0, cl_opt * 1.12],
+                                 mode="lines",
+                                 line=dict(color="#8B93A1", dash="dot",
+                                           width=1),
+                                 showlegend=False, hoverinfo="skip"))
         fig.add_trace(go.Scatter(x=curves['cd_t'], y=curves['cl_t'],
                                  mode="lines",
                                  line=dict(
                                      color=ACCENTS["Aérodynamique"][0],
                                      width=2),
-                                 showlegend=False))
+                                 showlegend=False,
+                                 hovertemplate="CD : %{x:.5f}<br>"
+                                               "CL : %{y:.4f}<extra></extra>"))
+        fig.add_trace(go.Scatter(x=[cd_opt], y=[cl_opt], mode="markers+text",
+                                 marker=dict(color=acc_vif, size=13,
+                                             symbol="star"),
+                                 text=[f"  finesse max {fin_opt:.1f}"],
+                                 textposition="middle right",
+                                 textfont=dict(color=acc_vif, size=12.5,
+                                               family=FONT_MONO),
+                                 cliponaxis=False, showlegend=False,
+                                 hoverinfo="skip"))
         fig.add_trace(go.Scatter(x=[rows[2][2]], y=[rows[2][1]],
                                  mode="markers",
                                  marker=dict(color=RED, size=9),
-                                 showlegend=False))
+                                 name="point courant", showlegend=False,
+                                 hovertemplate="CD : %{x:.5f}<br>"
+                                               "CL : %{y:.4f}<extra>"
+                                               "point courant</extra>"))
         fig.update_layout(height=420, template="plotly_white", font=dict(family=FONT_UI),
                           xaxis_title="CD_t", yaxis_title="CL_t",
                           title=f"Polaire avion complet — M = {mach:.2f}, "
@@ -869,7 +935,19 @@ def page_aero():
     with tab3:
         coef = st.selectbox("Coefficient", ["CL_t", "CD_t", "CM_t"])
         a_s, m_s, z = aero_surface(coef, dit)
-        fig = go.Figure(go.Surface(x=m_s, y=a_s, z=z, colorscale=SCALE_AERO))
+        z_cur = {"CL_t": rows[2][1], "CD_t": rows[2][2],
+                 "CM_t": rows[2][3]}[coef]
+        fig = go.Figure(go.Surface(x=m_s, y=a_s, z=z, colorscale=SCALE_AERO,
+                                   hovertemplate="Mach : %{x:.2f}<br>"
+                                                 "α : %{y:.2f}°<br>"
+                                                 f"{coef} : %{{z:.4f}}"
+                                                 "<extra></extra>"))
+        fig.add_trace(go.Scatter3d(x=[mach], y=[alpha], z=[z_cur],
+                                   mode="markers+text",
+                                   marker=dict(color=RED, size=5),
+                                   text=[f"  {z_cur:.4f}"],
+                                   textfont=dict(color=RED, size=12),
+                                   name="point courant", showlegend=False))
         fig.update_layout(height=560, template="plotly_white", font=dict(family=FONT_UI),
                           scene=dict(xaxis_title="Mach",
                                      yaxis_title="α [deg]",
@@ -1031,11 +1109,33 @@ def page_prop():
             fig.add_trace(go.Scatter(x=n1s,
                                      y=mod_prop.get_thrust(n1s, M, h, disa),
                                      name=f"M={M:.2f}", legendgroup=f"{M:.2f}",
-                                     showlegend=True), row=1, col=1)
+                                     showlegend=True,
+                                     hovertemplate="N1 : %{x:.1f} %<br>"
+                                                   "FN : %{y:.3f}"
+                                                   "<extra>M=" + f"{M:.2f}"
+                                                   "</extra>"), row=1, col=1)
             fig.add_trace(go.Scatter(x=n1s,
                                      y=mod_prop.get_fuel_flow(n1s, M, h, disa),
                                      name=f"M={M:.2f}", legendgroup=f"{M:.2f}",
-                                     showlegend=False), row=1, col=2)
+                                     showlegend=False,
+                                     hovertemplate="N1 : %{x:.1f} %<br>"
+                                                   "WF : %{y:.4f} kg/s"
+                                                   "<extra>M=" + f"{M:.2f}"
+                                                   "</extra>"), row=1, col=2)
+        fig.add_trace(go.Scatter(x=[n1], y=[fn], mode="markers+text",
+                                 marker=dict(color=RED, size=9),
+                                 text=[f"  {fn:.3f}"], textposition="top center",
+                                 textfont=dict(color=RED, size=12,
+                                               family=FONT_MONO),
+                                 cliponaxis=False, showlegend=False,
+                                 hoverinfo="skip"), row=1, col=1)
+        fig.add_trace(go.Scatter(x=[n1], y=[wf], mode="markers+text",
+                                 marker=dict(color=RED, size=9),
+                                 text=[f"  {wf:.3f}"], textposition="top center",
+                                 textfont=dict(color=RED, size=12,
+                                               family=FONT_MONO),
+                                 cliponaxis=False, showlegend=False,
+                                 hoverinfo="skip"), row=1, col=2)
         fig.update_xaxes(title_text="N1 [%]")
         fig.update_layout(height=440, template="plotly_white", font=dict(family=FONT_UI),
                           colorway=APPLE_SEQ,
@@ -1048,10 +1148,21 @@ def page_prop():
         fn_surf = mod_prop.get_thrust(N1g, Mg, h, disa)
         wf_surf = mod_prop.get_fuel_flow(N1g, Mg, h, disa)
         cc1, cc2 = st.columns(2)
-        for col, (surf, nom) in zip((cc1, cc2),
-                                    ((fn_surf, "FN"), (wf_surf, "WF [kg/s]"))):
+        for col, (surf, nom, z_cur) in zip(
+                (cc1, cc2),
+                ((fn_surf, "FN", fn), (wf_surf, "WF [kg/s]", wf))):
             fig = go.Figure(go.Surface(x=N1g, y=Mg, z=surf,
-                                       colorscale=SCALE_PROP))
+                                       colorscale=SCALE_PROP,
+                                       hovertemplate="N1 : %{x:.1f} %<br>"
+                                                     "Mach : %{y:.2f}<br>"
+                                                     f"{nom} : %{{z:.4f}}"
+                                                     "<extra></extra>"))
+            fig.add_trace(go.Scatter3d(x=[n1], y=[mach], z=[z_cur],
+                                       mode="markers+text",
+                                       marker=dict(color=RED, size=5),
+                                       text=[f"  {z_cur:.3f}"],
+                                       textfont=dict(color=RED, size=12),
+                                       name="point courant", showlegend=False))
             fig.update_layout(height=480, template="plotly_white", font=dict(family=FONT_UI),
                               scene=dict(xaxis_title="N1 [%]",
                                          yaxis_title="Mach",
@@ -1069,7 +1180,21 @@ def page_prop():
                 fig.add_trace(go.Scatter(x=n1s, y=e[key],
                                          name=f"M={M:.2f}",
                                          legendgroup=f"{M:.2f}",
-                                         showlegend=(i == 1)), row=1, col=i)
+                                         showlegend=(i == 1),
+                                         hovertemplate="N1 : %{x:.1f} %<br>"
+                                                       + key + " : %{y:.3f}"
+                                                       " g/kg<extra>M="
+                                                       + f"{M:.2f}</extra>"),
+                              row=1, col=i)
+        for i, key in enumerate(("EI_NOx", "EI_CO", "EI_UHC"), start=1):
+            fig.add_trace(go.Scatter(x=[n1], y=[ei[key]], mode="markers+text",
+                                     marker=dict(color=RED, size=9),
+                                     text=[f"  {ei[key]:.2f}"],
+                                     textposition="top center",
+                                     textfont=dict(color=RED, size=11.5,
+                                                   family=FONT_MONO),
+                                     cliponaxis=False, showlegend=False,
+                                     hoverinfo="skip"), row=1, col=i)
         fig.update_xaxes(title_text="N1 [%]")
         fig.update_layout(height=440, template="plotly_white", font=dict(family=FONT_UI),
                           colorway=APPLE_SEQ,
