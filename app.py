@@ -133,9 +133,15 @@ st.markdown("""
     position: sticky; top: 0; z-index: 100;
 }
 /* bandeau de titre : pas de cadre visible, mais un verre dépoli léger qui
-   estompe le contenu défilant dessous pour préserver la lisibilité du titre */
-.am-head { padding: 8px 4px; background: rgba(247, 249, 252, .55);
-           -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+   estompe le contenu défilant dessous pour préserver la lisibilité du titre.
+   Padding latéral connu sur le conteneur principal, que le bandeau compense
+   (marges négatives) pour s'étendre sur toute la largeur de la feuille. */
+[data-testid="stMainBlockContainer"] {
+    padding-left: 3rem; padding-right: 3rem;
+}
+.am-head { padding: 8px 3rem; margin-left: -3rem; margin-right: -3rem;
+           background: transparent;
+           -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
 .am-head .am-h1 { margin: 0; }
 /* ---- Téléphone : grilles resserrées, typo réduite, ratios empilés ---- */
 @media (max-width: 640px) {
