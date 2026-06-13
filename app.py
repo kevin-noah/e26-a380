@@ -132,10 +132,8 @@ st.markdown("""
 [data-testid="stElementContainer"]:has(.am-sticky) {
     position: sticky; top: 0; z-index: 100;
 }
-/* bandeau arrondi portant l'image du module (voile clair par-dessus) */
-.am-head { border-radius: 12px; border: 1px solid #E4E8EE;
-           padding: 14px 20px; background: rgba(255, 255, 255, .92);
-           -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+/* bandeau de titre transparent (pas de cadre, juste le titre) */
+.am-head { padding: 6px 2px; background: transparent; }
 .am-head .am-h1 { margin: 0; }
 /* ---- Téléphone : grilles resserrées, typo réduite, ratios empilés ---- */
 @media (max-width: 640px) {
@@ -166,21 +164,11 @@ def fr(x, dec=0):
 
 def page_head(titre, lede="", accent=None):
     # titre seul dans son bloc : son conteneur devient sticky (cf. CSS
-    # am-sticky), le lede défile normalement. Le bandeau am-head reprend
-    # l'image de la carte du module (le dégradé du h1 utilisant
-    # background-clip:text, l'image doit vivre sur le wrapper).
+    # am-sticky), le lede défile normalement. Bandeau transparent : juste
+    # le titre, sans cadre ni image (préférence Kevin).
     cls = "am-h1 grad" if accent else "am-h1"
     style = f' style="--acc:{accent}"' if accent else ""
-    bg = ""
-    img = CARD_IMGS.get(st.session_state.get("nav", ""))
-    if img is not None and img.exists():
-        b64 = _img_b64(str(img), img.stat().st_mtime)
-        bg = (' style="background:'
-              'linear-gradient(rgba(255,255,255,.84), '
-              'rgba(255,255,255,.84)), '
-              f'url(data:image/jpeg;base64,{b64}) center / cover '
-              'no-repeat"')
-    st.markdown(f'<div class="am-head am-sticky"{bg}>'
+    st.markdown(f'<div class="am-head am-sticky">'
                 f'<h1 class="{cls}"{style}>{titre}</h1></div>',
                 unsafe_allow_html=True)
     if lede:
