@@ -132,8 +132,10 @@ st.markdown("""
 [data-testid="stElementContainer"]:has(.am-sticky) {
     position: sticky; top: 0; z-index: 100;
 }
-/* bandeau de titre transparent (pas de cadre, juste le titre) */
-.am-head { padding: 6px 2px; background: transparent; }
+/* bandeau de titre : pas de cadre visible, mais un verre dépoli léger qui
+   estompe le contenu défilant dessous pour préserver la lisibilité du titre */
+.am-head { padding: 8px 4px; background: rgba(247, 249, 252, .55);
+           -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
 .am-head .am-h1 { margin: 0; }
 /* ---- Téléphone : grilles resserrées, typo réduite, ratios empilés ---- */
 @media (max-width: 640px) {
@@ -246,9 +248,16 @@ def aero_surface(coef, delta_it, n_alpha=45, n_mach=25):
     grid = model['f_clwb']
     alphas = np.linspace(grid['x_alpha'][0], grid['x_alpha'][-1], n_alpha)
     machs = np.linspace(grid['y_mach'][0], grid['y_mach'][-1], n_mach)
+    # totaux + composantes WB/HT ; WB ignore delta_it, HT le prend
     f = {'CL_t': mod_aero.get_cl_total,
          'CD_t': mod_aero.get_cd_total,
-         'CM_t': mod_aero.get_cm_total}[coef]
+         'CM_t': mod_aero.get_cm_total,
+         'CL_wb': lambda mdl, a, m, dit: mod_aero.get_cl_wb(mdl, a, m),
+         'CD_wb': lambda mdl, a, m, dit: mod_aero.get_cd_wb(mdl, a, m),
+         'CM_wb': lambda mdl, a, m, dit: mod_aero.get_cm_wb(mdl, a, m),
+         'CL_ht': mod_aero.get_cl_ht,
+         'CD_ht': mod_aero.get_cd_ht,
+         'CM_ht': mod_aero.get_cm_ht}[coef]
     z = np.array([[f(model, a, m, delta_it) for m in machs] for a in alphas])
     return alphas, machs, z
 
@@ -921,10 +930,16 @@ def page_aero():
         st.plotly_chart(fig, config=PLOTLY_CONF)
 
     with tab3:
-        coef = st.selectbox("Coefficient", ["CL_t", "CD_t", "CM_t"])
+        coef = st.selectbox("Coefficient",
+                            ["CL_t", "CL_wb", "CL_ht",
+                             "CD_t", "CD_wb", "CD_ht",
+                             "CM_t", "CM_wb", "CM_ht"])
         a_s, m_s, z = aero_surface(coef, dit)
-        z_cur = {"CL_t": rows[2][1], "CD_t": rows[2][2],
-                 "CM_t": rows[2][3]}[coef]
+        # rows : [0]=WB, [1]=HT, [2]=total ; chaque ligne (nom, CL, CD, CM)
+        z_cur = {"CL_t": rows[2][1], "CD_t": rows[2][2], "CM_t": rows[2][3],
+                 "CL_wb": rows[0][1], "CD_wb": rows[0][2], "CM_wb": rows[0][3],
+                 "CL_ht": rows[1][1], "CD_ht": rows[1][2],
+                 "CM_ht": rows[1][3]}[coef]
         fig = go.Figure(go.Surface(x=m_s, y=a_s, z=z, colorscale=SCALE_AERO,
                                    hovertemplate="Mach : %{x:.2f}<br>"
                                                  "α : %{y:.2f}°<br>"
