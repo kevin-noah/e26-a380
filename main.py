@@ -762,6 +762,37 @@ def _print_trim_result(r, args):
           f"({r['WF_total_kgh']:.0f} kg/h)")
     print("=" * 56)
     print()
+    _print_trim_history(r['history'], r['converged'])
+
+
+# Codes ANSI pour surligner la ligne d'équilibre dans le tableau d'itérations
+_GREEN = "\033[1;92m"   # vert vif (gras)
+_RESET = "\033[0m"
+
+
+def _print_trim_history(history, converged=True):
+    """Affiche le détail de chaque itération de l'algorithme d'équilibrage.
+
+    La dernière ligne (point d'équilibre) est surlignée en vert si l'algorithme
+    a convergé.
+    """
+    print("  Détail des itérations (algorithme de Ghazi & Botez)")
+    print("  " + "─" * 74)
+    print(f"  {'it':>2}{'α[°]':>8}{'δstab[°]':>10}{'F_N[kN]':>10}"
+          f"{'CL':>9}{'CD':>9}{'|Δα|':>9}{'|ΔF_N|':>9}{'|Δδ|':>9}")
+    print("  " + "─" * 74)
+    for i, h in enumerate(history):
+        ligne = (f"  {h['it']:>2}{h['alpha']:>8.3f}{h['dstab']:>10.3f}"
+                 f"{h['FN']/1000:>10.1f}{h['CL']:>9.4f}{h['CD']:>9.5f}"
+                 f"{h['d_alpha']:>9.1e}{h['d_FN']:>9.1e}{h['d_dstab']:>9.1e}")
+        # Ligne d'équilibre (dernière itération convergée) en vert
+        if converged and i == len(history) - 1:
+            ligne = _GREEN + ligne + _RESET
+        print(ligne)
+    print("  " + "─" * 74)
+    if converged:
+        print(f"  {_GREEN}■{_RESET} ligne verte = itération d'équilibre")
+    print()
 
 
 def loop_trim():

@@ -13,6 +13,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import numpy as np
+import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -56,6 +57,15 @@ SCALE_MODULES = [
     [1.00, "#FF9F0A"],   # PROP — orange
 ]
 
+# Quadrillage dense sur les surfaces 3D (façon mesh MATLAB) : ~n lignes par axe
+def _contours(x_vals, y_vals, n=22):
+    def axc(vals):
+        lo, hi = float(np.min(vals)), float(np.max(vals))
+        size = (hi - lo) / n if hi > lo else 1.0
+        return dict(show=True, color="rgba(255,255,255,.5)", width=1,
+                    start=lo, end=hi, size=size)
+    return dict(x=axc(x_vals), y=axc(y_vals))
+
 # Piles de polices : Helvetica Neue en premier (préférence utilisateur),
 # SF Mono pour les chiffres
 FONT_UI = ('"Helvetica Neue", Helvetica, -apple-system, BlinkMacSystemFont, '
@@ -67,7 +77,8 @@ ASSETS = Path(__file__).parent / "assets"
 HERO_VIDEO = ASSETS / "video-accueil.mp4"
 SIDEBAR_IMG = ASSETS / "sidebar-airflow.jpg"
 
-st.set_page_config(page_title="A380 — MGA803", page_icon="✈️", layout="wide")
+st.set_page_config(page_title="A380 — MGA803", page_icon="✈️", layout="wide",
+                   initial_sidebar_state="expanded")
 
 # ---------------------------------------------------------------------------
 # Composants UI (maquette module atmosphérique) — CSS scopé aux classes am-*
@@ -144,13 +155,52 @@ st.markdown("""
    estompe le contenu défilant dessous pour préserver la lisibilité du titre.
    Padding latéral connu sur le conteneur principal, que le bandeau compense
    (marges négatives) pour s'étendre sur toute la largeur de la feuille. */
-[data-testid="stMainBlockContainer"] {
+[data-testid="stMainBlockContainer"], .block-container,
+[data-testid="stAppViewBlockContainer"] {
+    max-width: 1080px !important;
+    margin-left: auto !important; margin-right: auto !important;
     padding-left: 3rem; padding-right: 3rem;
 }
 .am-head { padding: 8px 3rem; margin-left: -3rem; margin-right: -3rem;
            background: transparent;
            -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
 .am-head .am-h1 { margin: 0; }
+/* ---- Volet gauche en tiroir : caché, glisse au survol, se referme à la sortie ---- */
+[data-testid="stSidebar"] {
+    position: fixed !important;
+    top: 0; left: 0; height: 100vh !important;
+    z-index: 1000 !important;
+    transform: translateX(-100%) !important;
+    transition: transform .28s cubic-bezier(.4, 0, .2, 1) !important;
+    box-shadow: 8px 0 40px rgba(9, 21, 38, .28);
+}
+/* révélé quand la souris survole la bande de gauche (#sb-hot) ou le volet */
+[data-testid="stApp"]:has(#sb-hot:hover) [data-testid="stSidebar"],
+[data-testid="stSidebar"]:hover {
+    transform: translateX(0) !important;
+}
+/* bande de détection invisible le long du bord gauche */
+#sb-hot { position: fixed; top: 0; left: 0; width: 16px; height: 100vh;
+    z-index: 1001; }
+/* contenu principal toujours pleine largeur (volet hors flux) */
+[data-testid="stMain"] { margin-left: 0 !important; }
+/* ---- Sliders façon maquette : pouce blanc à ombre, piste fine arrondie ---- */
+[data-testid="stSlider"] div[role="slider"] {
+    background-color: #FFFFFF !important;
+    border: .5px solid rgba(0, 0, 0, .06) !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .16), 0 4px 12px rgba(0, 0, 0, .22) !important;
+}
+/* piste (filled + unfilled) plus épaisse et arrondie — plusieurs cibles DOM */
+[data-testid="stSliderTrack"],
+[data-testid="stSliderTrack"] > div,
+[data-testid="stSlider"] [data-baseweb="slider"] > div > div,
+[data-testid="stSlider"] [data-baseweb="slider"] > div > div > div:not([role="slider"]) {
+    height: 8px !important;
+    border-radius: 999px !important;
+}
+/* valeur au-dessus du pouce : couleur d'accent du module si défini */
+[data-testid="stSliderThumbValue"] { color: var(--acc, #1B3A5C) !important;
+    font-variant-numeric: tabular-nums; }
 /* ---- Téléphone : grilles resserrées, typo réduite, ratios empilés ---- */
 @media (max-width: 640px) {
   .am-h1 { font-size: 26px; }
@@ -536,239 +586,355 @@ def carte_saisie(champs):
                          horizontal=True, label_visibility="collapsed")
 
 
+# Style « tableau de bord » (porté de la maquette Claude design iPad) —
+# classes dash-* confinées, rendues via st.markdown (verre dépoli, indicateurs)
+_DASH_CSS = """
+<style>
+.dash-ind-grid { display:grid; grid-template-columns: repeat(4, 1fr) 1.35fr;
+    gap:14px; margin: 4px 0 2px; }
+.dash-ind { background: rgba(255,255,255,.72);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+    border: .5px solid rgba(255,255,255,.75); border-radius:16px;
+    box-shadow: 0 1px 2px rgba(16,24,40,.04), 0 10px 30px rgba(16,24,40,.06);
+    padding:15px 16px 14px; display:flex; flex-direction:column; gap:6px;
+    min-height:92px; justify-content:center; }
+.dash-ind .lbl { font-size:11.5px; font-weight:600; color:#8E8E93;
+    text-transform:uppercase; letter-spacing:.04em; }
+.dash-ind .num { font-family: ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
+    font-weight:500; font-size:27px; line-height:1; letter-spacing:-.02em;
+    color:#1C1C1E; font-variant-numeric:tabular-nums; }
+.dash-ind .num .u { font-size:13px; font-weight:500; color:#8E8E93; margin-left:5px; }
+.dash-ind .sym { font-size:12px; color:var(--acc,#0066CC); font-weight:600; }
+.dash-ind.ratios { flex-direction:row; padding:12px 6px; gap:0; }
+.dash-ratio { flex:1; text-align:center; display:flex; flex-direction:column;
+    gap:5px; border-right:.5px solid rgba(60,60,67,.12); }
+.dash-ratio:last-child { border-right:none; }
+.dash-ratio .g { font-size:16px; color:#6E6E73; font-style:italic;
+    font-family:Georgia,"Times New Roman",serif; }
+.dash-ratio .rv { font-family: ui-monospace,"SF Mono",monospace; font-size:17px;
+    font-weight:500; color:#1C1C1E; font-variant-numeric:tabular-nums; }
+.dash-ratio .rl { font-size:9.5px; color:#8E8E93; text-transform:uppercase;
+    letter-spacing:.05em; }
+.dash-chart-head { display:flex; align-items:baseline; justify-content:space-between;
+    margin:2px 2px 0; }
+.dash-chart-head .nm { font-size:14px; font-weight:600; color:#3A3A3C; }
+.dash-chart-head .cur { font-family: ui-monospace,"SF Mono",monospace; font-size:13px;
+    font-weight:500; color:var(--acc,#0066CC); font-variant-numeric:tabular-nums; }
+/* Cartes KPI (maquettes Conversion / Aéro / Prop / Trim) */
+.dash-kpi-grid { display:grid; gap:14px; margin:4px 0 2px; }
+.dash-kpi { background: rgba(255,255,255,.72);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+    border:.5px solid rgba(255,255,255,.75); border-radius:16px;
+    box-shadow:0 1px 2px rgba(16,24,40,.04),0 10px 30px rgba(16,24,40,.06);
+    padding:14px 17px 13px; display:flex; flex-direction:column; gap:5px; }
+.dash-kpi .tag { align-self:flex-start; font-size:9.5px; font-weight:700;
+    letter-spacing:.07em; color:var(--acc,#0066CC);
+    background: color-mix(in srgb, var(--acc,#0066CC) 13%, white);
+    padding:2px 7px; border-radius:999px; text-transform:uppercase; }
+.dash-kpi .lab { font-size:12.5px; font-weight:600; color:#3A3A3C; }
+.dash-kpi .num { font-family: ui-monospace,"SF Mono",monospace; font-weight:500;
+    font-size:30px; line-height:1.05; letter-spacing:-.02em; color:#1C1C1E;
+    font-variant-numeric:tabular-nums; }
+.dash-kpi .num .u { font-size:13px; font-weight:500; color:#8E8E93; margin-left:5px; }
+.dash-kpi .desc { font-size:11px; color:#8E8E93; line-height:1.35; }
+.dash-kpi.hl { box-shadow:0 0 0 2px var(--acc,#0066CC),
+    0 10px 30px rgba(16,24,40,.08); }
+/* Grille de détails */
+.dash-detgrid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px 22px; }
+.dash-dcell { display:flex; flex-direction:column; gap:3px; }
+.dash-dcell .dl { font-size:11px; color:#8E8E93; font-weight:600;
+    text-transform:uppercase; letter-spacing:.03em; }
+.dash-dcell .dv { font-family: ui-monospace,"SF Mono",monospace; font-size:15px;
+    font-weight:500; color:#1C1C1E; font-variant-numeric:tabular-nums; }
+.dash-dcell .dv .u { font-size:11px; color:#8E8E93; margin-left:3px; }
+@media (max-width:920px){ .dash-ind-grid{ grid-template-columns:repeat(2,1fr);}
+    .dash-detgrid{ grid-template-columns:repeat(2,1fr);} }
+</style>
+"""
+
+
+def _dash_kpi(lab, num, unit="", desc="", tag="", hl=False, acc="#0066CC"):
+    """Carte KPI façon maquette : tag optionnel, label, gros chiffre mono, description."""
+    t = f'<span class="tag">{tag}</span>' if tag else ""
+    u = f'<span class="u">{unit}</span>' if unit else ""
+    d = f'<span class="desc">{desc}</span>' if desc else ""
+    cls = "dash-kpi hl" if hl else "dash-kpi"
+    return (f'<div class="{cls}" style="--acc:{acc}">{t}'
+            f'<span class="lab">{lab}</span>'
+            f'<span class="num">{num}{u}</span>{d}</div>')
+
+
+def _dash_dcell(label, value, unit=""):
+    """Cellule de détail : label discret + valeur mono."""
+    u = f'<span class="u">{unit}</span>' if unit else ""
+    return (f'<div class="dash-dcell"><span class="dl">{label}</span>'
+            f'<span class="dv">{value}{u}</span></div>')
+
+
+def _scene3d(xt, yt, zt):
+    """Scène 3D avec quadrillage et panneaux visibles (rendu lisible)."""
+    def ax(t):
+        return dict(title=t, showgrid=True, gridcolor="rgba(60,60,67,.22)",
+                    gridwidth=1, showbackground=True,
+                    backgroundcolor="rgba(247,249,252,.55)",
+                    zerolinecolor="rgba(60,60,67,.35)",
+                    showline=True, linecolor="rgba(60,60,67,.3)")
+    return dict(xaxis=ax(xt), yaxis=ax(yt), zaxis=ax(zt))
+
+
+def _dash_ind(lbl, num, unit, sym_txt=""):
+    """Carte indicateur (verre dépoli) façon maquette : label, gros chiffre, sous-texte."""
+    u = f'<span class="u">{unit}</span>' if unit else ""
+    s = f'<span class="sym">{sym_txt}</span>' if sym_txt else ""
+    return (f'<div class="dash-ind"><span class="lbl">{lbl}</span>'
+            f'<span class="num">{num}{u}</span>{s}</div>')
+
+
 def page_atm():
-    page_head("Module atmosphérique — ISA",
-              "Propriétés de l'air en fonction de l'altitude et de l'écart "
-              "de température ΔISA. La pression n'est pas affectée par "
-              "ΔISA ; la masse volumique et la vitesse du son en découlent.",
-              accent=ACCENTS["Atmosphère"][1])
+    acc_d, acc_v = ACCENTS["Atmosphère"]
+    page_head("Atmosphère standard internationale",
+              "Conditions ambiantes le long du profil de vol de l'A380 — "
+              "modèle ISA.", accent=acc_v)
+    st.markdown(_DASH_CSS, unsafe_allow_html=True)
 
-    _init_slider("atm_h", 11700.0)
-    _init_slider("atm_disa", 0.0)
-
-    c_main, c_panel = ruban_saisie("atm_ruban")
-    with c_main:
-        with st.container(border=True,
-                          height="stretch" if c_panel is not None else "content"):
-            st.slider(r"Altitude $h$ [m]", 0.0, 20000.0, step=50.0,
-                      key="atm_h_slider")
-            h = float(st.session_state.atm_h_slider)
-            st.caption(f"≈ {fr(h / FT)} ft")
-            st.slider(r"Écart $\Delta_{ISA}$ [°C]", -30.0, 30.0, step=1.0,
-                      key="atm_disa_slider")
-            disa = float(st.session_state.atm_disa_slider)
-            st.caption("plus froid que standard" if disa < 0 else
-                       "plus chaud que standard" if disa > 0 else
-                       "atmosphère standard")
-    if c_panel is not None:
-        with c_panel:
-            carte_saisie([
-                (r"Altitude $h$", 0.0, 20000.0,
-                 {"m": (1.0, 100.0), "ft": (FT, 500.0)}, "atm_h"),
-                (r"Écart $\Delta_{ISA}$ [°C]", -30.0, 30.0, 1.0, "atm_disa"),
-            ])
+    # ── Barre de contrôles, toujours visible ───────────────────────────────
+    with st.container(border=True):
+        cc1, cc2 = st.columns(2)
+        h = cc1.slider("Altitude [m]", 0.0, 20000.0, 11700.0, 50.0, key="atm_h")
+        cc1.caption(f"≈ {fr(h / FT)} ft")
+        disa = cc2.slider("Écart à l'ISA — ΔISA [°C]", -30.0, 30.0, 0.0, 1.0,
+                          key="atm_disa")
+        cc2.caption("plus froid que standard" if disa < 0 else
+                    "plus chaud que standard" if disa > 0 else
+                    "atmosphère standard")
 
     props = mod_atm.atmosphere(h, disa)
 
-    with st.container(border=True):
-        metrics_card("État de l'air au point courant", [
-            metric(f"Température {sym('<i>T</i>')}", f"{props['T']:.2f}", "K",
-                   f"{props['T'] - 273.15:+.1f} °C"),
-            metric(f"Pression {sym('<i>P</i>')}", fr(props['P']), "Pa",
-                   f"{props['P'] / 100:.1f} hPa"),
-            metric(f"Masse volumique {sym('<i>ρ</i>')}",
-                   f"{props['rho']:.4f}", "kg/m³",
-                   f"{props['sigma'] * 100:.1f} % de ρ₀"),
-            metric(f"Vitesse du son {sym('<i>a</i>')}",
-                   f"{props['a']:.1f}", "m/s",
-                   f"{props['a'] / KT:.0f} kt"),
-        ], cols=2, accent=ACCENTS["Atmosphère"][0])
+    # ── Bande d'indicateurs (4 cartes + ratios) ────────────────────────────
+    ratios = (
+        '<div class="dash-ind ratios">'
+        f'<div class="dash-ratio"><span class="g">θ</span>'
+        f'<span class="rv">{props["theta"]:.4f}</span>'
+        f'<span class="rl">T / T₀</span></div>'
+        f'<div class="dash-ratio"><span class="g">δ</span>'
+        f'<span class="rv">{props["delta"]:.4f}</span>'
+        f'<span class="rl">P / P₀</span></div>'
+        f'<div class="dash-ratio"><span class="g">σ</span>'
+        f'<span class="rv">{props["sigma"]:.4f}</span>'
+        f'<span class="rl">ρ / ρ₀</span></div></div>')
+    st.markdown(
+        f'<div class="dash-ind-grid" style="--acc:{acc_d}">'
+        + _dash_ind("Température", f"{props['T']:.2f}", "K",
+                    f"{props['T'] - 273.15:+.1f} °C")
+        + _dash_ind("Pression", fr(props['P']), "Pa",
+                    f"{props['P'] / 100:.1f} hPa")
+        + _dash_ind("Masse volumique ρ", f"{props['rho']:.4f}", "kg/m³",
+                    f"{props['sigma'] * 100:.1f} % de ρ₀")
+        + _dash_ind("Vitesse du son a", f"{props['a']:.1f}", "m/s",
+                    f"{props['a'] / KT:.0f} kt")
+        + ratios + '</div>', unsafe_allow_html=True)
 
-    ratios_strip([
-        (sym('<i>θ</i> = <i>T</i>/<i>T</i><sub>0</sub>'),
-         f"{props['theta']:.4f}"),
-        (sym('<i>δ</i> = <i>P</i>/<i>P</i><sub>0</sub>'),
-         f"{props['delta']:.4f}"),
-        (sym('<i>σ</i> = <i>ρ</i>/<i>ρ</i><sub>0</sub>'),
-         f"{props['sigma']:.4f}"),
-    ], accent=ACCENTS["Atmosphère"][0])
-
+    # ── Grille 2×2 de profils verticaux (cartes verre dépoli) ──────────────
     hs = np.linspace(0.0, 20000.0, 201)
-    # (nom, unité, profil, valeur courante, texte de l'étiquette)
     profils = [
-        ("Température T", "K", mod_atm.temperature(hs, disa), props['T'],
-         f"{props['T']:.1f}"),
-        ("Pression P", "Pa", mod_atm.pressure(hs, disa), props['P'],
-         fr(props['P'])),
-        ("Masse volumique ρ", "kg/m³", mod_atm.density(hs, disa), props['rho'],
-         f"{props['rho']:.4f}"),
-        ("Vitesse du son a", "m/s", mod_atm.speed_of_sound(hs, disa),
-         props['a'], f"{props['a']:.1f}"),
+        ("Température — T(z)", "K", mod_atm.temperature(hs, disa), props['T'],
+         f"{props['T']:.2f} K"),
+        ("Pression — P(z)", "Pa", mod_atm.pressure(hs, disa), props['P'],
+         f"{fr(props['P'])} Pa"),
+        ("Masse volumique — ρ(z)", "kg/m³", mod_atm.density(hs, disa),
+         props['rho'], f"{props['rho']:.4f} kg/m³"),
+        ("Vitesse du son — a(z)", "m/s", mod_atm.speed_of_sound(hs, disa),
+         props['a'], f"{props['a']:.1f} m/s"),
     ]
-    fig = make_subplots(rows=2, cols=2,
-                        subplot_titles=[f"{p[0]} [{p[1]}]" for p in profils],
-                        horizontal_spacing=0.12, vertical_spacing=0.13)
+    grille = [st.columns(2, gap="medium"), st.columns(2, gap="medium")]
     for i, (nom, unit, vals, cur, cur_txt) in enumerate(profils):
-        row, col = i // 2 + 1, i % 2 + 1
-        fig.add_trace(go.Scatter(x=vals, y=hs, mode="lines",
-                                 line=dict(color=ACCENTS["Atmosphère"][0],
-                                           width=2),
-                                 showlegend=False,
-                                 hovertemplate=f"{nom} : %{{x:.4g}} {unit}"
-                                               f"<br>h : %{{y:,.0f}} m"
-                                               f"<extra></extra>"),
-                      row=row, col=col)
-        fig.add_trace(go.Scatter(x=[cur], y=[h], mode="markers",
-                                 marker=dict(color=RED, size=22, opacity=.15),
-                                 showlegend=False, hoverinfo="skip"),
-                      row=row, col=col)
-        fig.add_trace(go.Scatter(x=[cur], y=[h], mode="markers+text",
-                                 marker=dict(color=RED, size=9),
-                                 text=[f" {cur_txt} {unit}"],
-                                 textposition="middle right",
-                                 textfont=dict(color=RED, size=12.5,
-                                               family=FONT_MONO),
-                                 cliponaxis=False,
-                                 showlegend=False, hoverinfo="skip"),
-                      row=row, col=col)
-    fig.add_hline(y=mod_atm.H_TROPO, line_dash="dot", line_width=1.5,
-                  line_color="#8B93A1", row="all", col="all")
-    fig.add_annotation(text="Tropopause — 11 000 m", x=0.04,
-                       xref="x domain", xanchor="left",
-                       y=mod_atm.H_TROPO, yanchor="bottom", yshift=3,
-                       showarrow=False,
-                       font=dict(size=11, color="#8B93A1"),
-                       row=1, col=1)
-    fig.update_yaxes(title_text="h [m]", col=1)
-    fig.update_layout(height=640, template="plotly_white",
-                      font=dict(family=FONT_UI), margin=dict(t=40, b=40))
-    with st.container(border=True):
-        st.markdown('<div class="am-card-title">Profils atmosphériques '
-                    '0 – 20 km</div>', unsafe_allow_html=True)
-        st.caption(f"ΔISA = {disa:+.0f} °C · point courant à {fr(h)} m")
-        st.plotly_chart(fig, config=PLOTLY_CONF)
+        with grille[i // 2][i % 2]:
+            with st.container(border=True):
+                st.markdown(
+                    f'<div class="dash-chart-head"><span class="nm">{nom}</span>'
+                    f'<span class="cur" style="--acc:{acc_d}">{cur_txt}</span>'
+                    f'</div>', unsafe_allow_html=True)
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=vals, y=hs, mode="lines", line=dict(color=acc_v, width=2.4),
+                    showlegend=False,
+                    hovertemplate=f"{nom} : %{{x:.4g}} {unit}<br>"
+                                  "h : %{y:,.0f} m<extra></extra>"))
+                fig.add_trace(go.Scatter(
+                    x=[cur], y=[h], mode="markers", marker=dict(color=RED, size=9),
+                    showlegend=False, hoverinfo="skip"))
+                fig.add_hline(y=mod_atm.H_TROPO, line_dash="dot", line_width=1.2,
+                              line_color="rgba(60,60,67,.34)")
+                fig.update_yaxes(title_text="h [m]", range=[0, 20000])
+                fig.update_layout(height=240, template="plotly_white",
+                                  font=dict(family=FONT_UI), showlegend=False,
+                                  margin=dict(t=8, b=32, l=10, r=12))
+                st.plotly_chart(fig, config=PLOTLY_CONF)
+    st.caption("Ligne pointillée : tropopause (11 000 m) · point rouge : "
+               f"altitude courante {fr(h)} m")
 
-    with st.expander("Altitude à partir de la pression"):
+    # ── Détails repliables ─────────────────────────────────────────────────
+    with st.expander("Modèle, formules & inversion P → altitude"):
+        st.latex(r"T = T_0 + L\,h + \Delta T_{ISA}\quad(L=-6.5\ \mathrm{K/km})"
+                 r"\qquad \rho = \frac{P}{R\,T}\qquad a = \sqrt{\gamma\,R\,T}")
+        st.latex(r"P = P_0\left(\frac{T - \Delta T_{ISA}}{T_0}\right)"
+                 r"^{-g/(R\,L)}\qquad\text{(pression indépendante de }"
+                 r"\Delta T_{ISA})")
+        st.caption("Inversion : retrouver l'altitude à partir d'une pression.")
         p_query = st.number_input(r"Pression $P$ [Pa]", 5000.0, 110000.0,
                                   float(props['P']), 100.0)
         h_inv = mod_atm.altitude_from_pressure(p_query, disa)
         st.metric("Altitude h", f"{float(h_inv):,.1f} m")
-
-    with st.expander("Formules du modèle ISA"):
-        st.latex(r"T = T_0 + L\,h + \Delta T_{ISA}"
-                 r"\qquad (h \le 11\,000\ \mathrm{m},\ L = -6.5\ "
-                 r"\mathrm{K/km})")
-        st.latex(r"P = P_0\left(\frac{T - \Delta T_{ISA}}{T_0}\right)"
-                 r"^{-g/(R\,L)}\qquad\text{(pression indépendante de }"
-                 r"\Delta T_{ISA})")
-        st.latex(r"\rho = \frac{P}{R\,T}\qquad a = \sqrt{\gamma\,R\,T}")
         st.latex(r"\theta = \frac{T}{T_0}\qquad \delta = \frac{P}{P_0}"
                  r"\qquad \sigma = \frac{\rho}{\rho_0}")
 
 
+def _solve_speeds(typ, val, h, disa):
+    """À partir d'une entrée (Mach si typ='Mach', sinon m/s), renvoie
+    (TAS, CAS en m/s, Mach)."""
+    if typ == "Mach":
+        M = val
+        tas = mod_conv.mach_to_tas(M, h, disa)
+        cas = mod_conv.mach_to_cas(M, h, disa)
+    elif typ == "TAS":
+        tas = val
+        M = mod_conv.tas_to_mach(tas, h, disa)
+        cas = mod_conv.tas_to_cas(tas, h, disa)
+    else:  # CAS
+        cas = val
+        M = mod_conv.cas_to_mach(cas, h, disa)
+        tas = mod_conv.cas_to_tas(cas, h, disa)
+    return float(tas), float(cas), float(M)
+
+
 def page_conv():
-    page_head("Module de conversion — TAS / CAS / Mach",
-              "Conversions isentropiques entre vitesse vraie, vitesse "
-              "calibrée et nombre de Mach, basées sur l'atmosphère ISA.",
-              accent=ACCENTS["Conversion"][1])
+    acc_d, acc_v = ACCENTS["Conversion"]
+    page_head("Conversion de vitesses",
+              "TAS / CAS / Mach en atmosphère ISA — conversions isentropiques.",
+              accent=acc_v)
+    st.markdown(_DASH_CSS, unsafe_allow_html=True)
 
-    convs = {
-        "Mach → TAS": (mod_conv.mach_to_tas, "mach", "vitesse"),
-        "TAS → Mach": (mod_conv.tas_to_mach, "vitesse", "mach"),
-        "Mach → CAS": (mod_conv.mach_to_cas, "mach", "vitesse"),
-        "CAS → Mach": (mod_conv.cas_to_mach, "vitesse", "mach"),
-        "TAS → CAS": (mod_conv.tas_to_cas, "vitesse", "vitesse"),
-        "CAS → TAS": (mod_conv.cas_to_tas, "vitesse", "vitesse"),
-    }
-
-    _init_slider("conv_h", 10000.0)
-    _init_slider("conv_disa", 0.0)
-
-    c_main, c_panel = ruban_saisie("conv_ruban")
-    with c_main:
-        with st.container(border=True,
-                          height="stretch" if c_panel is not None else "content"):
-            c1, c2 = st.columns([1, 2])
-            choix = c1.radio("Conversion", list(convs))
-            f, kind_in, kind_out = convs[choix]
-
-            with c2:
-                cc1, cc2 = st.columns(2)
-                if kind_in == "mach":
-                    val_in = cc1.number_input("Mach", 0.0, 1.0, 0.85, 0.01)
-                    x = val_in
-                    unite = cc2.radio("Unité de sortie", ["kt", "m/s"],
-                                      horizontal=True)
-                else:
-                    unite = cc2.radio("Unité d'entrée/sortie", ["kt", "m/s"],
-                                      horizontal=True)
-                    val_in = cc1.number_input(f"Vitesse [{unite}]", 0.0,
-                                              1200.0, 300.0, 1.0)
-                    x = val_in * KT if unite == "kt" else val_in
-                cc3, cc4 = st.columns(2)
-                cc3.slider("Altitude h [m]", 0.0, 20000.0, step=50.0,
-                           key="conv_h_slider")
-                cc4.slider("ΔISA [°C]", -30.0, 30.0, step=1.0,
-                           key="conv_disa_slider")
-                h = float(st.session_state.conv_h_slider)
-                disa = float(st.session_state.conv_disa_slider)
-    if c_panel is not None:
-        with c_panel:
-            carte_saisie([
-                ("Altitude h", 0.0, 20000.0,
-                 {"m": (1.0, 100.0), "ft": (FT, 500.0)}, "conv_h"),
-                ("ΔISA [°C]", -30.0, 30.0, 1.0, "conv_disa"),
-            ])
-
-    res = float(f(x, h, disa))
+    # ── Contrôles toujours visibles ────────────────────────────────────────
     with st.container(border=True):
-        if kind_out == "mach":
-            items = [metric(choix, f"{res:.4f}", "Mach",
-                            f"{res * mod_atm.speed_of_sound(h, disa) / KT:.0f}"
-                            f" kt TAS")]
+        c0, c1, c2, c3 = st.columns([1.2, 1.5, 1, 1])
+        typ = c0.segmented_control("Type d'entrée", ["TAS", "CAS", "Mach"],
+                                   default="CAS", key="conv_type") or "CAS"
+        if typ == "Mach":
+            val = c1.slider("Entrée — Mach", 0.20, 0.92, 0.80, 0.01,
+                            key="conv_mach")
+            val_si = val
         else:
-            res_aff = res / KT if unite == "kt" else res
-            autre = (f"{res:.2f} m/s" if unite == "kt"
-                     else f"{res / KT:.2f} kt")
-            items = [metric(choix, f"{res_aff:.2f}", unite, autre)]
-        metrics_card("Résultat", items, cols=1,
-                     accent=ACCENTS["Conversion"][0])
+            val = c1.slider(f"Entrée — {typ} [kt]", 100.0, 400.0, 280.0, 1.0,
+                            key="conv_spd")
+            val_si = val * KT
+        h = c2.slider("Altitude [m]", 0.0, 13100.0, 11000.0, 50.0, key="conv_h")
+        disa = c3.slider("ΔISA [°C]", -30.0, 30.0, 0.0, 1.0, key="conv_disa")
 
-    hs = np.linspace(0.0, 20000.0, 201)
-    ys = np.array([float(f(x, hh, disa)) for hh in hs])
-    if kind_out == "vitesse" and unite == "kt":
-        ys = ys / KT
-    y_label = "Mach" if kind_out == "mach" else f"Vitesse [{unite}]"
-    cur = res if kind_out == "mach" else (res / KT if unite == "kt" else res)
-    cur_txt = f"{cur:.4f}" if kind_out == "mach" else f"{cur:.1f} {unite}"
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=ys, y=hs, mode="lines",
-                             line=dict(color=ACCENTS["Conversion"][0],
-                                       width=2),
-                             showlegend=False,
-                             hovertemplate=f"{y_label} : %{{x:.4g}}"
-                                           f"<br>h : %{{y:,.0f}} m"
-                                           f"<extra></extra>"))
-    fig.add_trace(go.Scatter(x=[cur], y=[h], mode="markers",
-                             marker=dict(color=RED, size=22, opacity=.15),
-                             showlegend=False, hoverinfo="skip"))
-    fig.add_trace(go.Scatter(x=[cur], y=[h], mode="markers+text",
-                             marker=dict(color=RED, size=9),
-                             text=[f" {cur_txt}"], textposition="middle right",
-                             textfont=dict(color=RED, size=12.5,
-                                           family=FONT_MONO),
-                             cliponaxis=False,
-                             showlegend=False, hoverinfo="skip"))
-    fig.update_layout(height=420, template="plotly_white", font=dict(family=FONT_UI),
-                      xaxis_title=y_label, yaxis_title="h [m]",
-                      margin=dict(t=40, b=40))
+    tas, cas, M = _solve_speeds(typ, val_si, h, disa)
+    atm = mod_atm.atmosphere(h, disa)
+
+    # ── Bande KPI : TAS / CAS / Mach (entrée surlignée) ────────────────────
+    st.markdown(
+        '<div class="dash-kpi-grid" style="grid-template-columns:repeat(3,1fr)">'
+        + _dash_kpi("TAS · Vitesse vraie", f"{tas / KT:.1f}", "kt",
+                    "True Air Speed — vitesse réelle dans la masse d'air",
+                    tag="entrée" if typ == "TAS" else "",
+                    hl=(typ == "TAS"), acc=acc_d)
+        + _dash_kpi("CAS · Vitesse calibrée", f"{cas / KT:.1f}", "kt",
+                    "Calibrated Air Speed — vitesse lue au badin",
+                    tag="entrée" if typ == "CAS" else "",
+                    hl=(typ == "CAS"), acc=acc_d)
+        + _dash_kpi("Mach", f"{M:.4f}", "",
+                    "M = TAS / a — rapport à la vitesse du son locale",
+                    tag="entrée" if typ == "Mach" else "",
+                    hl=(typ == "Mach"), acc=acc_d)
+        + '</div>', unsafe_allow_html=True)
+
+    # ── Grille de graphes : 3 vitesses vs altitude + TAS&CAS vs entrée ─────
+    hs = np.linspace(0.0, 13100.0, 160)
+    tas_h, cas_h, mach_h = [], [], []
+    for hh in hs:
+        t, c, m = _solve_speeds(typ, val_si, hh, disa)
+        tas_h.append(t / KT); cas_h.append(c / KT); mach_h.append(m)
+
+    def _vchart(col, title, xs, cur_x, cur_txt, xlab):
+        with col:
+            with st.container(border=True):
+                st.markdown(
+                    f'<div class="dash-chart-head"><span class="nm">{title}</span>'
+                    f'<span class="cur" style="--acc:{acc_d}">{cur_txt}</span>'
+                    f'</div>', unsafe_allow_html=True)
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=xs, y=hs, mode="lines", line=dict(color=acc_v, width=2.4),
+                    showlegend=False,
+                    hovertemplate=f"{xlab} : %{{x:.4g}}<br>"
+                                  "h : %{y:,.0f} m<extra></extra>"))
+                fig.add_trace(go.Scatter(
+                    x=[cur_x], y=[h], mode="markers", marker=dict(color=RED, size=9),
+                    showlegend=False, hoverinfo="skip"))
+                fig.update_yaxes(range=[0, 13100], title_text="h [m]")
+                fig.update_layout(height=230, template="plotly_white",
+                                  font=dict(family=FONT_UI), showlegend=False,
+                                  margin=dict(t=8, b=30, l=10, r=12))
+                st.plotly_chart(fig, config=PLOTLY_CONF)
+
+    g1 = st.columns(2, gap="medium")
+    _vchart(g1[0], "TAS vs altitude", tas_h, tas / KT, f"{tas / KT:.1f} kt",
+            "TAS [kt]")
+    _vchart(g1[1], "CAS vs altitude", cas_h, cas / KT, f"{cas / KT:.1f} kt",
+            "CAS [kt]")
+    g2 = st.columns(2, gap="medium")
+    _vchart(g2[0], "Mach vs altitude", mach_h, M, f"{M:.4f}", "Mach")
+    with g2[1]:
+        with st.container(border=True):
+            st.markdown(
+                '<div class="dash-chart-head"><span class="nm">TAS &amp; CAS '
+                f'vs entrée</span><span class="cur" style="--acc:{acc_d}">'
+                f'à {fr(h)} m</span></div>', unsafe_allow_html=True)
+            if typ == "Mach":
+                in_si = np.linspace(0.20, 0.92, 120); in_x = in_si
+                xlab = "Mach entrée"
+            else:
+                in_si = np.linspace(100.0, 400.0, 120) * KT; in_x = in_si / KT
+                xlab = f"{typ} entrée [kt]"
+            t_line, c_line = [], []
+            for v in in_si:
+                t, c, _ = _solve_speeds(typ, v, h, disa)
+                t_line.append(t / KT); c_line.append(c / KT)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=in_x, y=t_line, mode="lines", name="TAS",
+                line=dict(color=acc_v, width=2.4),
+                hovertemplate="entrée %{x:.3g}<br>TAS %{y:.1f} kt<extra></extra>"))
+            fig.add_trace(go.Scatter(x=in_x, y=c_line, mode="lines", name="CAS",
+                line=dict(color=acc_d, width=2.2, dash="dot"),
+                hovertemplate="entrée %{x:.3g}<br>CAS %{y:.1f} kt<extra></extra>"))
+            fig.add_trace(go.Scatter(x=[val], y=[tas / KT], mode="markers",
+                marker=dict(color=RED, size=9), showlegend=False, hoverinfo="skip"))
+            fig.update_layout(height=230, template="plotly_white",
+                font=dict(family=FONT_UI), margin=dict(t=8, b=34, l=10, r=12),
+                xaxis_title=xlab, yaxis_title="kt",
+                legend=dict(font=dict(size=9), orientation="h", y=1.04, x=0))
+            st.plotly_chart(fig, config=PLOTLY_CONF)
+
+    # ── Détails atmosphériques ─────────────────────────────────────────────
+    a0 = mod_atm.A0
+    eas = tas * np.sqrt(atm['sigma'])
+    qc = mod_atm.P0 * ((1 + 0.2 * (cas / a0) ** 2) ** 3.5 - 1)
     with st.container(border=True):
-        st.markdown(f'<div class="am-card-title">{choix} en fonction de '
-                    'l\'altitude</div>', unsafe_allow_html=True)
-        st.caption(f"Entrée constante : {val_in:g} "
-                   f"{'Mach' if kind_in == 'mach' else unite} · "
-                   f"ΔISA = {disa:+.0f} °C")
-        st.plotly_chart(fig, config=PLOTLY_CONF)
+        st.markdown(
+            '<div class="dash-detgrid">'
+            + _dash_dcell("Température (SAT)", f"{atm['T'] - 273.15:.1f}", "°C")
+            + _dash_dcell("Pression statique", f"{atm['P'] / 100:.1f}", "hPa")
+            + _dash_dcell("Densité de l'air", f"{atm['rho']:.4f}", "kg/m³")
+            + _dash_dcell("Ratio densité σ", f"{atm['sigma']:.4f}")
+            + _dash_dcell("Vitesse du son a", f"{atm['a'] / KT:.1f}", "kt")
+            + _dash_dcell("EAS · équivalente", f"{eas / KT:.1f}", "kt")
+            + _dash_dcell("Pression d'impact qc", f"{qc / 100:.1f}", "hPa")
+            + _dash_dcell("Niveau de vol", f"FL{h / FT / 100:.0f}")
+            + '</div>', unsafe_allow_html=True)
 
     with st.expander("Formules de conversion"):
         st.latex(r"V_{TAS} = M\,a_0\sqrt{\theta}")
@@ -781,45 +947,28 @@ def page_conv():
 
 
 def page_aero():
-    page_head("Module aérodynamique — A380",
-              "Coefficients de portance, de traînée et de moment construits "
-              "sur les données OpenVSP / VSPAERO — aile-fuselage, empennage "
-              "horizontal et avion complet.",
-              accent=ACCENTS["Aérodynamique"][1])
+    acc_d, acc_v = ACCENTS["Aérodynamique"]
+    page_head("Aérodynamique",
+              "Coefficients VSPAERO — portance, traînée et moment de tangage "
+              "(aile-fuselage, empennage, avion complet).", accent=acc_v)
+    st.markdown(_DASH_CSS, unsafe_allow_html=True)
 
     model = load_aero_model()
     grid = model['f_clwb']
     a_min, a_max = float(grid['x_alpha'][0]), float(grid['x_alpha'][-1])
     m_min, m_max = float(grid['y_mach'][0]), float(grid['y_mach'][-1])
 
-    _init_slider("aero_alpha", 2.0)
-    _init_slider("aero_mach", min(0.85, m_max))
-    _init_slider("aero_dit", 0.0)
-
-    c_main, c_panel = ruban_saisie("aero_ruban")
-    with c_main:
-        with st.container(border=True,
-                          height="stretch" if c_panel is not None else "content"):
-            c1, c2, c3 = st.columns(3)
-            c1.slider(r"Angle d'attaque $\alpha$ [deg]", a_min, a_max,
-                      step=0.1, key="aero_alpha_slider")
-            c2.slider(r"Mach $M$", m_min, m_max, step=0.01,
-                      key="aero_mach_slider")
-            c3.slider(r"Calage empennage $\delta_{it}$ [deg]", -10.0, 10.0,
-                      step=0.5, key="aero_dit_slider")
-            alpha = float(st.session_state.aero_alpha_slider)
-            mach = float(st.session_state.aero_mach_slider)
-            dit = float(st.session_state.aero_dit_slider)
-    if c_panel is not None:
-        with c_panel:
-            carte_saisie([
-                (r"$\alpha$ [deg]", a_min, a_max, 0.1, "aero_alpha"),
-                (r"Mach $M$", m_min, m_max, 0.01, "aero_mach"),
-                (r"$\delta_{it}$ [deg]", -10.0, 10.0, 0.5, "aero_dit"),
-            ])
+    # ── Contrôles toujours visibles ────────────────────────────────────────
+    with st.container(border=True):
+        c1, c2, c3 = st.columns(3)
+        alpha = c1.slider("Incidence α [°]", a_min, a_max, 2.0, 0.1,
+                          key="aero_alpha")
+        mach = c2.slider("Mach", m_min, m_max, float(min(0.84, m_max)), 0.01,
+                         key="aero_mach")
+        dit = c3.slider("Calage stab. δit [°]", -10.0, 10.0, 0.0, 0.5,
+                        key="aero_dit")
 
     eps = float(mod_aero.f_downwash(alpha))
-
     rows = [
         ("Aile + fuselage (WB)",
          mod_aero.get_cl_wb(model, alpha, mach),
@@ -834,144 +983,121 @@ def page_aero():
          mod_aero.get_cd_total(model, alpha, mach, dit),
          mod_aero.get_cm_total(model, alpha, mach, dit)),
     ]
-    cl_t, cd_t = rows[2][1], rows[2][2]
-
-    with st.container(border=True):
-        for nom, cl, cd, cm in rows:
-            metrics_card(nom, [
-                metric(sym('<i>C</i><sub>L</sub>'), f"{cl:.4f}"),
-                metric(sym('<i>C</i><sub>D</sub>'), f"{cd:.5f}"),
-                metric(sym('<i>C</i><sub>M</sub>'), f"{cm:.4f}"),
-            ], cols=3, small=True,
-                         accent=ACCENTS["Aérodynamique"][0])
-
-    ratios_strip([
-        (f"Downwash {sym('<i>ε</i>')}", f"{eps:.3f}°"),
-        (sym('<i>α</i><sub>ht</sub> = <i>α</i> − <i>ε</i> + '
-             '<i>δ</i><sub>it</sub>'),
-         f"{alpha - eps + dit:.3f}°"),
-        (f"Finesse {sym('<i>C</i><sub>L,t</sub>/<i>C</i><sub>D,t</sub>')}",
-         f"{cl_t / cd_t:.2f}" if cd_t else "—"),
-    ], accent=ACCENTS["Aérodynamique"][0])
-
-    tab1, tab2, tab3 = st.tabs(["Coefficients vs α", "Polaire", "Surface 3D"])
+    cl_t, cd_t, cm_t = rows[2][1], rows[2][2], rows[2][3]
 
     curves = aero_curves(dit, mach)
     alphas = curves['alpha']
+    cl_arr = np.array(curves['cl_t']); cd_arr = np.array(curves['cd_t'])
+    with np.errstate(divide="ignore", invalid="ignore"):
+        fin = np.where(cd_arr > 0, cl_arr / cd_arr, -np.inf)
+    idx = int(np.argmax(fin))
+    cl_opt, cd_opt, fin_opt, a_opt = (cl_arr[idx], cd_arr[idx],
+                                      fin[idx], alphas[idx])
 
-    with tab1:
-        fig = make_subplots(rows=1, cols=3,
-                            subplot_titles=("CL", "CD", "CM"))
+    # ── Bande KPI : coefficients totaux + finesse max ──────────────────────
+    st.markdown(
+        '<div class="dash-kpi-grid" style="grid-template-columns:repeat(4,1fr)">'
+        + _dash_kpi("C<sub>L</sub> total", f"{cl_t:.4f}", "",
+                    "voilure + fuselage + empennage", acc=acc_d)
+        + _dash_kpi("C<sub>D</sub> total", f"{cd_t:.5f}", "",
+                    "profil + induite + onde", acc=acc_d)
+        + _dash_kpi("C<sub>M</sub> total", f"{cm_t:.4f}", "",
+                    "moment rapporté à 25 % CMA", acc=acc_d)
+        + _dash_kpi("Finesse L/D max", f"{fin_opt:.1f}", "",
+                    f"à α = {a_opt:.1f}° · courante {cl_t / cd_t:.1f}",
+                    hl=True, acc=acc_d)
+        + '</div>', unsafe_allow_html=True)
+
+    # ── Coefficients = f(α) · pleine largeur ───────────────────────────────
+    with st.container(border=True):
+        st.markdown('<div class="dash-chart-head"><span class="nm">Coefficients '
+                    '= f(α) · total vs aile-fuselage</span><span class="cur" '
+                    f'style="--acc:{acc_d}">M {mach:.2f} · δit {dit:+.1f}°</span>'
+                    '</div>', unsafe_allow_html=True)
+        fig = make_subplots(rows=1, cols=3, subplot_titles=("CL", "CD", "CM"))
         for i, key in enumerate(("cl", "cd", "cm"), start=1):
             cname = key.upper()
             fig.add_trace(go.Scatter(x=alphas, y=curves[f'{key}_t'],
-                                     name="total", legendgroup="t",
-                                     showlegend=(i == 1),
-                                     line=dict(
-                                         color=ACCENTS["Aérodynamique"][0],
-                                         width=2),
-                                     hovertemplate=f"α : %{{x:.2f}}°<br>"
-                                                   f"{cname} total : %{{y:.4f}}"
-                                                   f"<extra></extra>"),
-                          row=1, col=i)
+                name="total", legendgroup="t", showlegend=(i == 1),
+                line=dict(color=acc_v, width=2),
+                hovertemplate=f"α %{{x:.2f}}°<br>{cname} total %{{y:.4f}}"
+                              "<extra></extra>"), row=1, col=i)
             fig.add_trace(go.Scatter(x=alphas, y=curves[f'{key}_wb'],
-                                     name="WB seul", legendgroup="wb",
-                                     showlegend=(i == 1),
-                                     line=dict(color="#8B93A1", dash="dash"),
-                                     hovertemplate=f"α : %{{x:.2f}}°<br>"
-                                                   f"{cname} WB : %{{y:.4f}}"
-                                                   f"<extra></extra>"),
-                          row=1, col=i)
-            cur = {"cl": rows[2][1], "cd": rows[2][2], "cm": rows[2][3]}[key]
-            fmt = ".5f" if key == "cd" else ".4f"
-            fig.add_trace(go.Scatter(x=[alpha], y=[cur], mode="markers+text",
-                                     marker=dict(color=RED, size=9),
-                                     text=[f" {cur:{fmt}}"],
-                                     textposition="middle right",
-                                     textfont=dict(color=RED, size=11.5,
-                                                   family=FONT_MONO),
-                                     cliponaxis=False,
-                                     showlegend=False, hoverinfo="skip"),
-                          row=1, col=i)
-        fig.update_xaxes(title_text="α [deg]")
-        fig.update_layout(height=420, template="plotly_white", font=dict(family=FONT_UI),
-                          title=f"Coefficients totaux — M = {mach:.2f}, "
-                                f"δ_it = {dit:+.1f}°")
+                name="WB seul", legendgroup="wb", showlegend=(i == 1),
+                line=dict(color="#8B93A1", dash="dash"),
+                hovertemplate=f"α %{{x:.2f}}°<br>{cname} WB %{{y:.4f}}"
+                              "<extra></extra>"), row=1, col=i)
+            cur = {"cl": cl_t, "cd": cd_t, "cm": cm_t}[key]
+            fig.add_trace(go.Scatter(x=[alpha], y=[cur], mode="markers",
+                marker=dict(color=RED, size=9), showlegend=False,
+                hoverinfo="skip"), row=1, col=i)
+        fig.update_xaxes(title_text="α [°]")
+        fig.update_layout(height=300, template="plotly_white",
+            font=dict(family=FONT_UI), margin=dict(t=30, b=36, l=10, r=10),
+            legend=dict(font=dict(size=9), orientation="h", y=1.22, x=0))
         st.plotly_chart(fig, config=PLOTLY_CONF)
 
-    with tab2:
-        cl_arr = np.array(curves['cl_t'])
-        cd_arr = np.array(curves['cd_t'])
-        with np.errstate(divide="ignore", invalid="ignore"):
-            fin = np.where(cd_arr > 0, cl_arr / cd_arr, -np.inf)
-        idx = int(np.argmax(fin))
-        cl_opt, cd_opt, fin_opt = cl_arr[idx], cd_arr[idx], fin[idx]
-        acc_vif = ACCENTS["Aérodynamique"][1]
-        fig = go.Figure()
-        # tangente depuis l'origine : sa pente est la finesse maximale
-        fig.add_trace(go.Scatter(x=[0, cd_opt * 1.12], y=[0, cl_opt * 1.12],
-                                 mode="lines",
-                                 line=dict(color="#8B93A1", dash="dot",
-                                           width=1),
-                                 showlegend=False, hoverinfo="skip"))
-        fig.add_trace(go.Scatter(x=curves['cd_t'], y=curves['cl_t'],
-                                 mode="lines",
-                                 line=dict(
-                                     color=ACCENTS["Aérodynamique"][0],
-                                     width=2),
-                                 showlegend=False,
-                                 hovertemplate="CD : %{x:.5f}<br>"
-                                               "CL : %{y:.4f}<extra></extra>"))
-        fig.add_trace(go.Scatter(x=[cd_opt], y=[cl_opt], mode="markers+text",
-                                 marker=dict(color=acc_vif, size=13,
-                                             symbol="star"),
-                                 text=[f"  finesse max {fin_opt:.1f}"],
-                                 textposition="middle right",
-                                 textfont=dict(color=acc_vif, size=12.5,
-                                               family=FONT_MONO),
-                                 cliponaxis=False, showlegend=False,
-                                 hoverinfo="skip"))
-        fig.add_trace(go.Scatter(x=[rows[2][2]], y=[rows[2][1]],
-                                 mode="markers",
-                                 marker=dict(color=RED, size=9),
-                                 name="point courant", showlegend=False,
-                                 hovertemplate="CD : %{x:.5f}<br>"
-                                               "CL : %{y:.4f}<extra>"
-                                               "point courant</extra>"))
-        fig.update_layout(height=420, template="plotly_white", font=dict(family=FONT_UI),
-                          xaxis_title="CD_t", yaxis_title="CL_t",
-                          title=f"Polaire avion complet — M = {mach:.2f}, "
-                                f"δ_it = {dit:+.1f}°")
-        st.plotly_chart(fig, config=PLOTLY_CONF)
+    # ── Polaire | Surface 3D ───────────────────────────────────────────────
+    p1, p2 = st.columns(2, gap="medium")
+    with p1:
+        with st.container(border=True):
+            st.markdown('<div class="dash-chart-head"><span class="nm">Polaire '
+                        'CL – CD</span><span class="cur" '
+                        f'style="--acc:{acc_d}">finesse max {fin_opt:.1f}</span>'
+                        '</div>', unsafe_allow_html=True)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=[0, cd_opt * 1.12], y=[0, cl_opt * 1.12],
+                mode="lines", line=dict(color="#8B93A1", dash="dot", width=1),
+                showlegend=False, hoverinfo="skip"))
+            fig.add_trace(go.Scatter(x=curves['cd_t'], y=curves['cl_t'],
+                mode="lines", line=dict(color=acc_v, width=2.4), showlegend=False,
+                hovertemplate="CD %{x:.5f}<br>CL %{y:.4f}<extra></extra>"))
+            fig.add_trace(go.Scatter(x=[cd_opt], y=[cl_opt], mode="markers",
+                marker=dict(color=acc_v, size=13, symbol="star"),
+                showlegend=False, hoverinfo="skip"))
+            fig.add_trace(go.Scatter(x=[cd_t], y=[cl_t], mode="markers",
+                marker=dict(color=RED, size=9), showlegend=False,
+                hoverinfo="skip"))
+            fig.update_layout(height=300, template="plotly_white",
+                font=dict(family=FONT_UI), margin=dict(t=8, b=34, l=10, r=12),
+                xaxis_title="CD", yaxis_title="CL")
+            st.plotly_chart(fig, config=PLOTLY_CONF)
+    with p2:
+        with st.container(border=True):
+            coef = st.selectbox("Surface 3D",
+                ["CL_t", "CL_wb", "CL_ht", "CD_t", "CD_wb", "CD_ht",
+                 "CM_t", "CM_wb", "CM_ht"], label_visibility="collapsed")
+            a_s, m_s, z = aero_surface(coef, dit)
+            z_cur = {"CL_t": cl_t, "CD_t": cd_t, "CM_t": cm_t,
+                     "CL_wb": rows[0][1], "CD_wb": rows[0][2], "CM_wb": rows[0][3],
+                     "CL_ht": rows[1][1], "CD_ht": rows[1][2],
+                     "CM_ht": rows[1][3]}[coef]
+            fig = go.Figure(go.Surface(x=m_s, y=a_s, z=z,
+                colorscale=SCALE_MODULES, showscale=False,
+                contours=_contours(m_s, a_s),
+                hovertemplate="Mach %{x:.2f}<br>α %{y:.2f}°<br>"
+                              f"{coef} %{{z:.4f}}<extra></extra>"))
+            fig.add_trace(go.Scatter3d(x=[mach], y=[alpha], z=[z_cur],
+                mode="markers", marker=dict(color=RED, size=4),
+                showlegend=False, name="point"))
+            fig.update_layout(height=300, template="plotly_white",
+                font=dict(family=FONT_UI), margin=dict(t=8, b=8, l=8, r=8),
+                scene=_scene3d("Mach", "α", coef))
+            st.plotly_chart(fig, config=PLOTLY_CONF)
 
-    with tab3:
-        coef = st.selectbox("Coefficient",
-                            ["CL_t", "CL_wb", "CL_ht",
-                             "CD_t", "CD_wb", "CD_ht",
-                             "CM_t", "CM_wb", "CM_ht"])
-        a_s, m_s, z = aero_surface(coef, dit)
-        # rows : [0]=WB, [1]=HT, [2]=total ; chaque ligne (nom, CL, CD, CM)
-        z_cur = {"CL_t": rows[2][1], "CD_t": rows[2][2], "CM_t": rows[2][3],
-                 "CL_wb": rows[0][1], "CD_wb": rows[0][2], "CM_wb": rows[0][3],
-                 "CL_ht": rows[1][1], "CD_ht": rows[1][2],
-                 "CM_ht": rows[1][3]}[coef]
-        fig = go.Figure(go.Surface(x=m_s, y=a_s, z=z, colorscale=SCALE_MODULES,
-                                   hovertemplate="Mach : %{x:.2f}<br>"
-                                                 "α : %{y:.2f}°<br>"
-                                                 f"{coef} : %{{z:.4f}}"
-                                                 "<extra></extra>"))
-        fig.add_trace(go.Scatter3d(x=[mach], y=[alpha], z=[z_cur],
-                                   mode="markers+text",
-                                   marker=dict(color=RED, size=5),
-                                   text=[f"  {z_cur:.4f}"],
-                                   textfont=dict(color=RED, size=12),
-                                   name="point courant", showlegend=False))
-        fig.update_layout(height=560, template="plotly_white", font=dict(family=FONT_UI),
-                          scene=dict(xaxis_title="Mach",
-                                     yaxis_title="α [deg]",
-                                     zaxis_title=coef),
-                          title=f"{coef}(α, M) — δ_it = {dit:+.1f}°")
-        st.plotly_chart(fig, config=PLOTLY_CONF)
+    # ── Décomposition aile-fuselage / empennage ────────────────────────────
+    with st.container(border=True):
+        st.markdown(
+            '<div class="dash-detgrid">'
+            + _dash_dcell("Downwash ε", f"{eps:.2f}", "°")
+            + _dash_dcell("Incidence empennage α_ht", f"{alpha - eps + dit:.2f}", "°")
+            + _dash_dcell("CL aile-fuselage", f"{rows[0][1]:.4f}")
+            + _dash_dcell("CL empennage", f"{rows[1][1]:.4f}")
+            + _dash_dcell("CD aile-fuselage", f"{rows[0][2]:.5f}")
+            + _dash_dcell("CD empennage", f"{rows[1][2]:.5f}")
+            + _dash_dcell("CM aile-fuselage", f"{rows[0][3]:.4f}")
+            + _dash_dcell("CM empennage", f"{rows[1][3]:.4f}")
+            + '</div>', unsafe_allow_html=True)
 
     with st.expander("Formules du modèle"):
         st.latex(r"\varepsilon = \varepsilon_0 + \varepsilon_\alpha\,\alpha"
@@ -997,43 +1123,24 @@ def page_aero():
 
 
 def page_prop():
-    page_head("Module de propulsion & émissions — Trent 970",
-              "Poussée nette et débit carburant par polynômes de surface "
-              "calibrés ; indices d'émission OACI généralisés aux conditions "
-              "de vol par la méthode Boeing Fuel Flow.",
-              accent=ACCENTS["Propulsion & Émissions"][1])
+    acc_d, acc_v = ACCENTS["Propulsion & Émissions"]
+    page_head("Propulsion & émissions — Trent 970",
+              "Tout le moteur en un coup d'œil : poussée, débit carburant "
+              "et émissions OACI.",
+              accent=acc_v)
+    st.markdown(_DASH_CSS, unsafe_allow_html=True)
 
-    _init_slider("prop_n1", 90.0)
-    _init_slider("prop_mach", 0.85)
-    _init_slider("prop_h", 10668.0)
-    _init_slider("prop_disa", 0.0)
-
-    c_main, c_panel = ruban_saisie("prop_ruban")
-    with c_main:
-        with st.container(border=True,
-                          height="stretch" if c_panel is not None else "content"):
-            c1, c2 = st.columns(2)
-            c1.slider(r"Fan speed $N1$ [%]", 60.0, 100.0, step=0.5,
-                      key="prop_n1_slider")
-            c2.slider(r"Mach $M$", 0.0, 0.85, step=0.01,
-                      key="prop_mach_slider")
-            c1.slider(r"Altitude $h$ [m]", 0.0, 15000.0, step=50.0,
-                      key="prop_h_slider")
-            c2.slider(r"$\Delta_{ISA}$ [°C]", -30.0, 30.0, step=1.0,
-                      key="prop_disa_slider")
-            n1 = float(st.session_state.prop_n1_slider)
-            mach = float(st.session_state.prop_mach_slider)
-            h = float(st.session_state.prop_h_slider)
-            disa = float(st.session_state.prop_disa_slider)
-    if c_panel is not None:
-        with c_panel:
-            carte_saisie([
-                (r"$N1$ [%]", 60.0, 100.0, 0.5, "prop_n1"),
-                (r"Mach $M$", 0.0, 0.85, 0.01, "prop_mach"),
-                (r"Altitude $h$", 0.0, 15000.0,
-                 {"m": (1.0, 100.0), "ft": (FT, 500.0)}, "prop_h"),
-                (r"$\Delta_{ISA}$ [°C]", -30.0, 30.0, 1.0, "prop_disa"),
-            ])
+    # ── Barre de contrôles, toujours visible (tableau de bord) ─────────────
+    with st.container(border=True):
+        st.markdown('<div class="am-card-title">Conditions de vol</div>',
+                    unsafe_allow_html=True)
+        c1, c2, c3, c4 = st.columns(4)
+        n1   = c1.slider("Fan speed N1 [%]", 60.0, 100.0, 90.0, 0.5,
+                         key="prop_n1")
+        mach = c2.slider("Mach", 0.0, 0.85, 0.85, 0.01, key="prop_mach")
+        h    = c3.slider("Altitude [m]", 0.0, 15000.0, 10668.0, 50.0,
+                         key="prop_h")
+        disa = c4.slider("ΔISA [°C]", -30.0, 30.0, 0.0, 1.0, key="prop_disa")
 
     fn = float(mod_prop.get_thrust(n1, mach, h, disa))
     ei = mod_prop.get_emission_indices(n1, mach, h, disa)
@@ -1041,42 +1148,125 @@ def page_prop():
     theta = float(mod_atm.theta(h, disa))
     delta = float(mod_atm.delta(h, disa))
 
-    with st.container(border=True):
-        metrics_card("Performances moteur", [
-            metric(f"Poussée nette {sym('<i>F</i><sub>N</sub>')}",
-                   f"{fn:.4f}", "",
-                   f"× 4 moteurs = {4 * fn:.4f}"),
-            metric(f"Débit carburant {sym('<i>W</i><sub>F</sub>')}",
-                   f"{wf:.4f}", "kg/s",
-                   f"{fr(wf * 3600)} kg/h"),
-            metric(sym('<i>W</i><sub>F,C</sub><sup>REF</sup>') + " (BFF)",
-                   f"{ei['WF_C_REF']:.4f}", "kg/s",
-                   "table OACI : 0.261 – 2.738"),
-        ], cols=3, small=True,
-            accent=ACCENTS["Propulsion & Émissions"][0])
+    # ── Bande d'indicateurs clés (glass, toujours visible) ─────────────────
+    st.markdown(
+        '<div class="dash-kpi-grid" style="grid-template-columns:repeat(5,1fr)">'
+        + _dash_kpi("Poussée F<sub>N</sub> ×4", f"{4 * fn:.3f}", "",
+                    f"1 moteur : {fn:.3f}", acc=acc_d)
+        + _dash_kpi("Débit W<sub>F</sub>", f"{wf:.4f}", "kg/s",
+                    f"{fr(wf * 3600)} kg/h · total 4 moteurs", acc=acc_d)
+        + _dash_kpi("EI NOx", f"{ei['EI_NOx']:.2f}", "g/kg",
+                    "indice OACI · oxydes d'azote", acc=acc_d)
+        + _dash_kpi("EI CO", f"{ei['EI_CO']:.2f}", "g/kg",
+                    "monoxyde de carbone", acc=acc_d)
+        + _dash_kpi("EI CO₂", f"{ei['EI_CO2']:.2f}", "kg/kg",
+                    "dioxyde de carbone", acc=acc_d)
+        + '</div>', unsafe_allow_html=True)
 
-    with st.container(border=True):
-        metrics_card("Indices d'émission généralisés (méthode Boeing "
-                     "Fuel Flow)", [
-            metric(sym('EI<sub>NOx</sub>'), f"{ei['EI_NOx']:.3f}", "g/kg",
-                   f"{ei['EI_NOx'] * wf:.3f} g/s"),
-            metric(sym('EI<sub>UHC</sub>'), f"{ei['EI_UHC']:.4f}", "g/kg",
-                   f"{ei['EI_UHC'] * wf:.4f} g/s"),
-            metric(sym('EI<sub>CO</sub>'), f"{ei['EI_CO']:.3f}", "g/kg",
-                   f"{ei['EI_CO'] * wf:.3f} g/s"),
-            metric(sym('EI<sub>CO₂</sub>'), f"{ei['EI_CO2']:.2f}", "kg/kg",
-                   f"{ei['EI_CO2'] * wf:.3f} kg/s"),
-        ], cols=4, small=True,
-            accent=ACCENTS["Propulsion & Émissions"][0])
+    # ── Grille de graphes : tout visible d'un coup ─────────────────────────
+    n1s = np.linspace(60.0, 100.0, 81)
+    machs = np.linspace(0.0, 0.85, 6)
 
-    ratios_strip([
-        (sym('<i>N</i>1<sub>cor</sub> = <i>N</i>1/√<i>θ</i>'),
-         f"{n1 / np.sqrt(theta):.2f} %"),
-        (sym('<i>W</i><sub>F,C</sub> = <i>W</i><sub>F</sub>/'
-             '(<i>δ</i>√<i>θ</i>)'),
-         f"{wf / (delta * np.sqrt(theta)):.4f} kg/s"),
-        (f"Humidité spécifique {sym('<i>ω</i>')}", f"{ei['omega']:.6f}"),
-    ], accent=ACCENTS["Propulsion & Émissions"][0])
+    def _dash(fig, titre, h_px=300, legend=False):
+        fig.update_layout(height=h_px, template="plotly_white",
+                          font=dict(family=FONT_UI), colorway=APPLE_SEQ,
+                          margin=dict(t=42, b=40, l=12, r=12), title=titre,
+                          showlegend=legend, legend=dict(font=dict(size=9)))
+
+    gL, gR = st.columns(2)
+    with gL:
+        fig = go.Figure()
+        for M in machs:
+            fig.add_trace(go.Scatter(
+                x=n1s, y=mod_prop.get_thrust(n1s, M, h, disa), name=f"M={M:.2f}",
+                hovertemplate="N1 : %{x:.1f} %<br>FN : %{y:.3f}"
+                              "<extra>M=" + f"{M:.2f}</extra>"))
+        fig.add_trace(go.Scatter(
+            x=[n1], y=[fn], mode="markers+text", marker=dict(color=RED, size=9),
+            text=[f"  {fn:.3f}"], textposition="top center",
+            textfont=dict(color=RED, size=12, family=FONT_MONO),
+            cliponaxis=False, showlegend=False, hoverinfo="skip"))
+        fig.update_xaxes(title_text="N1 [%]")
+        _dash(fig, "Poussée FN")
+        st.plotly_chart(fig, config=PLOTLY_CONF)
+    with gR:
+        fig = go.Figure()
+        for M in machs:
+            fig.add_trace(go.Scatter(
+                x=n1s, y=mod_prop.get_fuel_flow(n1s, M, h, disa), name=f"M={M:.2f}",
+                hovertemplate="N1 : %{x:.1f} %<br>WF : %{y:.4f} kg/s"
+                              "<extra>M=" + f"{M:.2f}</extra>"))
+        fig.add_trace(go.Scatter(
+            x=[n1], y=[wf], mode="markers+text", marker=dict(color=RED, size=9),
+            text=[f"  {wf:.3f}"], textposition="top center",
+            textfont=dict(color=RED, size=12, family=FONT_MONO),
+            cliponaxis=False, showlegend=False, hoverinfo="skip"))
+        fig.update_xaxes(title_text="N1 [%]")
+        _dash(fig, "Débit WF [kg/s]", legend=True)
+        st.plotly_chart(fig, config=PLOTLY_CONF)
+
+    machs_3d = np.linspace(0.0, 0.85, 40)
+    N1g, Mg = np.meshgrid(n1s, machs_3d)
+    fn_surf = mod_prop.get_thrust(N1g, Mg, h, disa)
+    wf_surf = mod_prop.get_fuel_flow(N1g, Mg, h, disa)
+    s1, s2 = st.columns(2)
+    for col, (surf, nom, z_cur) in zip(
+            (s1, s2), ((fn_surf, "FN", fn), (wf_surf, "WF", wf))):
+        fig = go.Figure(go.Surface(
+            x=N1g, y=Mg, z=surf, colorscale=SCALE_MODULES, showscale=False,
+            contours=_contours(n1s, machs_3d),
+            hovertemplate="N1 : %{x:.1f} %<br>Mach : %{y:.2f}<br>"
+                          f"{nom} : %{{z:.4f}}<extra></extra>"))
+        fig.add_trace(go.Scatter3d(
+            x=[n1], y=[mach], z=[z_cur], mode="markers",
+            marker=dict(color=RED, size=5), showlegend=False, name="point"))
+        fig.update_layout(height=340, template="plotly_white",
+                          font=dict(family=FONT_UI), margin=dict(t=42, b=8, l=8, r=8),
+                          title=f"Surface {nom}",
+                          scene=_scene3d("N1", "Mach", nom))
+        col.plotly_chart(fig, config=PLOTLY_CONF)
+
+    fig = make_subplots(rows=1, cols=3,
+                        subplot_titles=("EI NOx [g/kg]", "EI CO [g/kg]",
+                                        "EI UHC [g/kg]"))
+    for M in machs:
+        e = mod_prop.get_emission_indices(n1s, M, h, disa)
+        for i, key in enumerate(("EI_NOx", "EI_CO", "EI_UHC"), start=1):
+            fig.add_trace(go.Scatter(
+                x=n1s, y=e[key], name=f"M={M:.2f}", legendgroup=f"{M:.2f}",
+                showlegend=(i == 1),
+                hovertemplate="N1 : %{x:.1f} %<br>" + key + " : %{y:.3f}"
+                              " g/kg<extra>M=" + f"{M:.2f}</extra>"),
+                row=1, col=i)
+    for i, key in enumerate(("EI_NOx", "EI_CO", "EI_UHC"), start=1):
+        fig.add_trace(go.Scatter(
+            x=[n1], y=[ei[key]], mode="markers+text", marker=dict(color=RED, size=9),
+            text=[f"  {ei[key]:.2f}"], textposition="top center",
+            textfont=dict(color=RED, size=11.5, family=FONT_MONO),
+            cliponaxis=False, showlegend=False, hoverinfo="skip"), row=1, col=i)
+    fig.update_xaxes(title_text="N1 [%]")
+    fig.update_layout(height=320, template="plotly_white", font=dict(family=FONT_UI),
+                      colorway=APPLE_SEQ, margin=dict(t=48, b=40, l=10, r=10),
+                      title="Indices d'émission vs N1")
+    st.plotly_chart(fig, config=PLOTLY_CONF)
+
+    # ── Détails repliables (sous le tableau de bord) ───────────────────────
+    with st.expander("Grandeurs intermédiaires & formules"):
+        ratios_strip([
+            (sym('<i>N</i>1<sub>cor</sub>'), f"{n1 / np.sqrt(theta):.2f} %"),
+            (sym('<i>W</i><sub>F,C</sub>'),
+             f"{wf / (delta * np.sqrt(theta)):.4f} kg/s"),
+            (sym('<i>W</i><sub>F,C</sub><sup>REF</sup>'),
+             f"{ei['WF_C_REF']:.4f} kg/s"),
+            (f"Humidité {sym('<i>ω</i>')}", f"{ei['omega']:.6f}"),
+        ], accent=acc_d)
+        st.latex(r"F_N = \bar f_{th}\!\left(\tfrac{N1}{\sqrt{\theta}},\,M"
+                 r"\right)\delta\qquad "
+                 r"W_F = \bar f_{wf}\!\left(\tfrac{N1}{\sqrt{\theta}},\,M"
+                 r"\right)\delta\sqrt{\theta}")
+        st.latex(r"EI_{NO_x} = EI_{NO_x,C}^{REF}\sqrt{\delta^{1.02}/"
+                 r"\theta^{3.3}}\;e^{-19\,(\omega - 0.00634)}\qquad "
+                 r"EI_{CO_2} = 3.16\ \mathrm{kg/kg}")
 
     with st.expander("Masses de polluants émises"):
         cc1, cc2 = st.columns(2)
@@ -1092,334 +1282,176 @@ def page_prop():
             metric("UHC", fr(em['m_UHC'] * n_mot / 1000, 3), "kg"),
             metric("CO", fr(em['m_CO'] * n_mot / 1000, 2), "kg"),
             metric("CO₂", fr(co2), "kg", f"{co2 / 1000:.2f} t"),
-        ], cols=5, small=True,
-            accent=ACCENTS["Propulsion & Émissions"][0])
-
-    with st.expander("Formules du modèle (méthode Boeing Fuel Flow)"):
-        st.latex(r"F_N = \bar f_{th}\!\left(\tfrac{N1}{\sqrt{\theta}},\,M"
-                 r"\right)\delta\qquad "
-                 r"W_F = \bar f_{wf}\!\left(\tfrac{N1}{\sqrt{\theta}},\,M"
-                 r"\right)\delta\sqrt{\theta}")
-        st.latex(r"W_{F,C}^{REF} = \frac{(1+0.2M^2)\,\theta^{\,3.8+y}}"
-                 r"{\delta^{\,1-x}}\,W_{F,C}\qquad x=1,\ y=0.5"
-                 r"\ \text{(Ghazi et Botez)}")
-        st.latex(r"EI_{UHC} = EI_{UHC,C}^{REF}\,\theta^{3.3}/\delta^{1.02}"
-                 r"\qquad EI_{CO} = EI_{CO,C}^{REF}\,\theta^{3.3}/"
-                 r"\delta^{1.02}")
-        st.latex(r"EI_{NO_x} = EI_{NO_x,C}^{REF}\sqrt{\delta^{1.02}/"
-                 r"\theta^{3.3}}\;e^{-19\,(\omega - 0.00634)}")
-        st.latex(r"\omega = \frac{0.62197058\;RH\;P_{SAT}}"
-                 r"{0.1P - RH\;P_{SAT}}\qquad "
-                 r"P_{SAT} = 6.107\times 10^{\frac{7.5\,(T-273.15)}"
-                 r"{T-35.85}}\qquad RH = 0.80")
-        st.latex(r"\Delta m_i = EI_i\,\Delta F_B\qquad "
-                 r"EI_{CO_2} = 3.16\ \mathrm{kg/kg}")
-
-    tab1, tab2, tab3 = st.tabs(["FN / WF vs N1", "Surfaces 3D", "Émissions vs N1"])
-
-    n1s = np.linspace(60.0, 100.0, 81)
-    machs = np.linspace(0.0, 0.85, 6)
-
-    with tab1:
-        fig = make_subplots(rows=1, cols=2,
-                            subplot_titles=("Poussée FN", "Débit WF [kg/s]"))
-        for M in machs:
-            fig.add_trace(go.Scatter(x=n1s,
-                                     y=mod_prop.get_thrust(n1s, M, h, disa),
-                                     name=f"M={M:.2f}", legendgroup=f"{M:.2f}",
-                                     showlegend=True,
-                                     hovertemplate="N1 : %{x:.1f} %<br>"
-                                                   "FN : %{y:.3f}"
-                                                   "<extra>M=" + f"{M:.2f}"
-                                                   "</extra>"), row=1, col=1)
-            fig.add_trace(go.Scatter(x=n1s,
-                                     y=mod_prop.get_fuel_flow(n1s, M, h, disa),
-                                     name=f"M={M:.2f}", legendgroup=f"{M:.2f}",
-                                     showlegend=False,
-                                     hovertemplate="N1 : %{x:.1f} %<br>"
-                                                   "WF : %{y:.4f} kg/s"
-                                                   "<extra>M=" + f"{M:.2f}"
-                                                   "</extra>"), row=1, col=2)
-        fig.add_trace(go.Scatter(x=[n1], y=[fn], mode="markers+text",
-                                 marker=dict(color=RED, size=9),
-                                 text=[f"  {fn:.3f}"], textposition="top center",
-                                 textfont=dict(color=RED, size=12,
-                                               family=FONT_MONO),
-                                 cliponaxis=False, showlegend=False,
-                                 hoverinfo="skip"), row=1, col=1)
-        fig.add_trace(go.Scatter(x=[n1], y=[wf], mode="markers+text",
-                                 marker=dict(color=RED, size=9),
-                                 text=[f"  {wf:.3f}"], textposition="top center",
-                                 textfont=dict(color=RED, size=12,
-                                               family=FONT_MONO),
-                                 cliponaxis=False, showlegend=False,
-                                 hoverinfo="skip"), row=1, col=2)
-        fig.update_xaxes(title_text="N1 [%]")
-        fig.update_layout(height=440, template="plotly_white", font=dict(family=FONT_UI),
-                          colorway=APPLE_SEQ,
-                          title=f"h = {h:.0f} m  |  ΔISA = {disa:+.0f} °C")
-        st.plotly_chart(fig, config=PLOTLY_CONF)
-
-    with tab2:
-        machs_3d = np.linspace(0.0, 0.85, 40)
-        N1g, Mg = np.meshgrid(n1s, machs_3d)
-        fn_surf = mod_prop.get_thrust(N1g, Mg, h, disa)
-        wf_surf = mod_prop.get_fuel_flow(N1g, Mg, h, disa)
-        cc1, cc2 = st.columns(2)
-        for col, (surf, nom, z_cur) in zip(
-                (cc1, cc2),
-                ((fn_surf, "FN", fn), (wf_surf, "WF [kg/s]", wf))):
-            fig = go.Figure(go.Surface(x=N1g, y=Mg, z=surf,
-                                       colorscale=SCALE_MODULES,
-                                       hovertemplate="N1 : %{x:.1f} %<br>"
-                                                     "Mach : %{y:.2f}<br>"
-                                                     f"{nom} : %{{z:.4f}}"
-                                                     "<extra></extra>"))
-            fig.add_trace(go.Scatter3d(x=[n1], y=[mach], z=[z_cur],
-                                       mode="markers+text",
-                                       marker=dict(color=RED, size=5),
-                                       text=[f"  {z_cur:.3f}"],
-                                       textfont=dict(color=RED, size=12),
-                                       name="point courant", showlegend=False))
-            fig.update_layout(height=480, template="plotly_white", font=dict(family=FONT_UI),
-                              scene=dict(xaxis_title="N1 [%]",
-                                         yaxis_title="Mach",
-                                         zaxis_title=nom),
-                              title=nom)
-            col.plotly_chart(fig, config=PLOTLY_CONF)
-
-    with tab3:
-        fig = make_subplots(rows=1, cols=3,
-                            subplot_titles=("EI NOx [g/kg]", "EI CO [g/kg]",
-                                            "EI UHC [g/kg]"))
-        for M in machs:
-            e = mod_prop.get_emission_indices(n1s, M, h, disa)
-            for i, key in enumerate(("EI_NOx", "EI_CO", "EI_UHC"), start=1):
-                fig.add_trace(go.Scatter(x=n1s, y=e[key],
-                                         name=f"M={M:.2f}",
-                                         legendgroup=f"{M:.2f}",
-                                         showlegend=(i == 1),
-                                         hovertemplate="N1 : %{x:.1f} %<br>"
-                                                       + key + " : %{y:.3f}"
-                                                       " g/kg<extra>M="
-                                                       + f"{M:.2f}</extra>"),
-                              row=1, col=i)
-        for i, key in enumerate(("EI_NOx", "EI_CO", "EI_UHC"), start=1):
-            fig.add_trace(go.Scatter(x=[n1], y=[ei[key]], mode="markers+text",
-                                     marker=dict(color=RED, size=9),
-                                     text=[f"  {ei[key]:.2f}"],
-                                     textposition="top center",
-                                     textfont=dict(color=RED, size=11.5,
-                                                   family=FONT_MONO),
-                                     cliponaxis=False, showlegend=False,
-                                     hoverinfo="skip"), row=1, col=i)
-        fig.update_xaxes(title_text="N1 [%]")
-        fig.update_layout(height=440, template="plotly_white", font=dict(family=FONT_UI),
-                          colorway=APPLE_SEQ,
-                          title=f"Indices d'émission — h = {h:.0f} m  |  "
-                                f"ΔISA = {disa:+.0f} °C")
-        st.plotly_chart(fig, config=PLOTLY_CONF)
+        ], cols=5, small=True, accent=acc_d)
 
 
 def page_trim():
     acc_d, acc_v = ACCENTS["Équilibrage (Trim)"]
-    page_head("Module d'équilibrage (Trim)",
-              "Équilibrage longitudinal en palier : résolution couplée de "
-              "l'incidence α, du calage du stabilisateur δstab et de la poussée "
-              "F_N (algorithme itératif de Ghazi & Botez), puis inversion du "
-              "modèle moteur vers le régime N1 et le débit carburant W_F.",
+    page_head("Équilibrage longitudinal",
+              "Résolution du trim — incidence α, calage du plan δstab et "
+              "poussée F_N par convergence simultanée des trois équations "
+              "d'équilibre (Ghazi & Botez), puis N1 et débit W_F.",
               accent=acc_v)
+    st.markdown(_DASH_CSS, unsafe_allow_html=True)
 
-    _init_slider("trim_mass", 350.0)
-    _init_slider("trim_mach", 0.55)
-    _init_slider("trim_h", 2000.0)
-    _init_slider("trim_disa", 0.0)
-    _init_slider("trim_xcg", 0.40)
-    _init_slider("trim_gamma", 0.0)
-
-    c_main, c_panel = ruban_saisie("trim_ruban")
-    with c_main:
-        with st.container(border=True,
-                          height="stretch" if c_panel is not None else "content"):
-            c1, c2 = st.columns(2)
-            c1.slider(r"Masse $m$ [t]", 300.0, 560.0, step=5.0,
-                      key="trim_mass_slider")
-            c2.slider(r"Mach $M$", 0.20, 0.85, step=0.01,
-                      key="trim_mach_slider")
-            c1.slider(r"Altitude $h$ [m]", 0.0, 12000.0, step=50.0,
-                      key="trim_h_slider")
-            c2.slider(r"$\Delta_{ISA}$ [°C]", -30.0, 30.0, step=1.0,
-                      key="trim_disa_slider")
-            c1.slider(r"Centrage $x_{cg}$ [MAC]", 0.0, 0.50, step=0.01,
-                      key="trim_xcg_slider")
-            c2.slider(r"Pente $\gamma$ [°]", -5.0, 10.0, step=0.5,
-                      key="trim_gamma_slider")
-            mass = float(st.session_state.trim_mass_slider) * 1000.0
-            mach = float(st.session_state.trim_mach_slider)
-            h = float(st.session_state.trim_h_slider)
-            disa = float(st.session_state.trim_disa_slider)
-            xcg = float(st.session_state.trim_xcg_slider)
-            gamma = float(st.session_state.trim_gamma_slider)
-    if c_panel is not None:
-        with c_panel:
-            carte_saisie([
-                (r"Masse $m$ [t]", 300.0, 560.0, 5.0, "trim_mass"),
-                (r"Mach $M$", 0.20, 0.85, 0.01, "trim_mach"),
-                (r"Altitude $h$", 0.0, 12000.0,
-                 {"m": (1.0, 100.0), "ft": (FT, 500.0)}, "trim_h"),
-                (r"$\Delta_{ISA}$ [°C]", -30.0, 30.0, 1.0, "trim_disa"),
-                (r"Centrage $x_{cg}$ [MAC]", 0.0, 0.50, 0.01, "trim_xcg"),
-                (r"Pente $\gamma$ [°]", -5.0, 10.0, 0.5, "trim_gamma"),
-            ])
+    # ── Contrôles toujours visibles ────────────────────────────────────────
+    with st.container(border=True):
+        a1, a2, a3 = st.columns(3)
+        mass = a1.slider("Masse [t]", 300.0, 575.0, 450.0, 1.0,
+                         key="trim_mass") * 1000.0
+        mach = a2.slider("Mach", 0.50, 0.89, 0.85, 0.01, key="trim_mach")
+        h = a3.slider("Altitude [m]", 0.0, 13000.0, 11000.0, 100.0,
+                      key="trim_h")
+        b1, b2, b3 = st.columns(3)
+        disa = b1.slider("ΔISA [°C]", -20.0, 20.0, 0.0, 1.0, key="trim_disa")
+        xcg = b2.slider("Centrage x_cg [MAC]", 0.20, 0.45, 0.32, 0.005,
+                        key="trim_xcg")
+        gamma = b3.slider("Pente γ [°]", -5.0, 8.0, 0.0, 0.1, key="trim_gamma")
 
     model = load_aero_model()
     try:
         r = mod_trim.trim(mass, mach, h, delta_isa=disa, x_cg=xcg,
                           gamma=gamma, model=model)
-    except ValueError as e:
-        st.warning(f"**Pas d'équilibre trouvé à ce point de vol.**\n\n{e}\n\n"
-                   "L'avion est *limité en poussée* : la poussée disponible ne "
-                   "couvre pas la traînée à ce point. En **haute altitude il "
-                   "faut voler plus vite** (la pression dynamique chute) — "
-                   "**augmente le Mach** (≈ 0.85 en croisière). Sinon, **descends "
-                   "en altitude** ou **réduis la masse**. Chaque masse a un "
-                   "plafond de croisière (step-climb) : ~FL369 à 500 t, "
-                   "~FL344 à 560 t, à M0.85.")
+    except ValueError as exc:
+        st.warning(f"**Pas d'équilibre trouvé à ce point de vol.**\n\n{exc}\n\n"
+                   "L'avion est *limité en poussée*. En haute altitude, "
+                   "**augmente le Mach** (≈ 0.85) ; sinon **descends** en "
+                   "altitude ou **allège**. Plafond ~FL369 à 500 t, "
+                   "~FL344 à 560 t (à M0.85).")
         return
-
     if not r['converged']:
         st.warning(f"Algorithme non convergé en {r['iterations']} itérations "
                    "— résultats indicatifs.")
 
-    # ── Paramètres d'équilibrage (les 3 inconnues + régime) ────────────────
+    # ── Bande KPI : les 3 inconnues + N1, débit, finesse ───────────────────
+    st.markdown(
+        '<div class="dash-kpi-grid" style="grid-template-columns:repeat(5,1fr)">'
+        + _dash_kpi("Incidence α", f"{r['alpha']:.2f}", "°",
+                    "angle d'incidence géométrique", acc=acc_d)
+        + _dash_kpi("Calage δ<sub>stab</sub>", f"{r['dstab']:.2f}", "°",
+                    "plan horizontal réglable", acc=acc_d)
+        + _dash_kpi("Régime N1", f"{r['N1']:.1f}", "%",
+                    f"convergé en {r['iterations']} it.", acc=acc_d)
+        + _dash_kpi("Débit W<sub>F</sub>", fr(r['WF_total_kgh']), "kg/h",
+                    "total 4 moteurs", acc=acc_d)
+        + _dash_kpi("Finesse L/D", f"{r['finesse']:.2f}", "",
+                    "C<sub>L</sub> / C<sub>D</sub> au point équilibré", acc=acc_d)
+        + '</div>', unsafe_allow_html=True)
+
+    # ── Convergence des inconnues (pleine largeur) ─────────────────────────
+    hist = r['history']
+    its = [hh['it'] for hh in hist]
     with st.container(border=True):
-        metrics_card("Paramètres d'équilibrage", [
-            metric(f"Incidence {sym('<i>α</i>')}", f"{r['alpha']:.2f}", "°"),
-            metric(f"Calage stab. {sym('<i>δ</i><sub>stab</sub>')}",
-                   f"{r['dstab']:.2f}", "°"),
-            metric(f"Régime {sym('<i>N</i>1')}", f"{r['N1']:.1f}", "%",
-                   f"convergé en {r['iterations']} it."),
-        ], cols=3, small=True, accent=acc_d)
+        st.markdown('<div class="dash-chart-head"><span class="nm">Convergence '
+                    'des inconnues</span><span class="cur" '
+                    f'style="--acc:{acc_d}">{r["iterations"]} itérations</span>'
+                    '</div>', unsafe_allow_html=True)
+        figc = make_subplots(rows=1, cols=3,
+                             subplot_titles=("α [°]", "δstab [°]", "F_N [kN]"))
+        series = [([hh['alpha'] for hh in hist], r['alpha'], 1),
+                  ([hh['dstab'] for hh in hist], r['dstab'], 2),
+                  ([hh['FN'] / 1000.0 for hh in hist], r['FN'] / 1000.0, 3)]
+        for ys, conv, col in series:
+            figc.add_trace(go.Scatter(x=its, y=ys, mode="lines+markers",
+                line=dict(color=acc_v, width=2), marker=dict(size=6),
+                showlegend=False,
+                hovertemplate="it %{x:.0f}<br>%{y:.3f}<extra></extra>"),
+                row=1, col=col)
+            figc.add_hline(y=conv, line=dict(color=RED, width=1, dash="dot"),
+                           row=1, col=col)
+        figc.update_xaxes(title_text="Itération")
+        figc.update_layout(height=290, template="plotly_white",
+                           font=dict(family=FONT_UI),
+                           margin=dict(t=28, b=36, l=10, r=10))
+        st.plotly_chart(figc, config=PLOTLY_CONF)
 
-    # ── Forces, finesse, poussée, carburant ────────────────────────────────
+    # ── Équilibre portance | moment ────────────────────────────────────────
+    grid = model['f_clwb']
+    alphas = np.linspace(grid['x_alpha'][0], grid['x_alpha'][-1], 100)
+    cl_curve = [mod_aero.get_cl_total(model, a, mach, r['dstab']) for a in alphas]
+    cl_req = r['L'] / (r['q'] * mod_trim.S_WB)
+    dstabs = np.linspace(mod_trim.DSTAB_MIN, mod_trim.DSTAB_MAX, 100)
+    m_curve = [mod_trim.moment_total(model, r['alpha'], mach, d, r['FN'],
+                                     r['q'], r['weight'], xcg, gamma) / 1e6
+               for d in dstabs]
+    e1, e2 = st.columns(2, gap="medium")
+    with e1:
+        with st.container(border=True):
+            st.markdown('<div class="dash-chart-head"><span class="nm">Équilibre '
+                        'de portance</span><span class="cur" '
+                        f'style="--acc:{acc_d}">CL requis {cl_req:.3f}</span>'
+                        '</div>', unsafe_allow_html=True)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=alphas, y=cl_curve, mode="lines",
+                line=dict(color=acc_v, width=2.4), showlegend=False,
+                hovertemplate="α %{x:.2f}°<br>CL %{y:.4f}<extra></extra>"))
+            fig.add_hline(y=cl_req, line=dict(color="#8B93A1", width=1, dash="dash"))
+            fig.add_trace(go.Scatter(x=[r['alpha']], y=[cl_req], mode="markers",
+                marker=dict(color=RED, size=10), showlegend=False, hoverinfo="skip"))
+            fig.update_layout(height=270, template="plotly_white",
+                font=dict(family=FONT_UI), margin=dict(t=8, b=34, l=10, r=12),
+                xaxis_title="α [°]", yaxis_title="CL")
+            st.plotly_chart(fig, config=PLOTLY_CONF)
+    with e2:
+        with st.container(border=True):
+            st.markdown('<div class="dash-chart-head"><span class="nm">Équilibre '
+                        'de moment</span><span class="cur" '
+                        f'style="--acc:{acc_d}">δstab {r["dstab"]:.2f}°</span>'
+                        '</div>', unsafe_allow_html=True)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=dstabs, y=m_curve, mode="lines",
+                line=dict(color=acc_v, width=2.4), showlegend=False,
+                hovertemplate="δstab %{x:.2f}°<br>M %{y:.3f} MN·m<extra></extra>"))
+            fig.add_hline(y=0.0, line=dict(color="#8B93A1", width=1, dash="dash"))
+            fig.add_trace(go.Scatter(x=[r['dstab']], y=[0.0], mode="markers",
+                marker=dict(color=RED, size=10), showlegend=False, hoverinfo="skip"))
+            fig.update_layout(height=270, template="plotly_white",
+                font=dict(family=FONT_UI), margin=dict(t=8, b=34, l=10, r=12),
+                xaxis_title="δstab [°]", yaxis_title="M [MN·m]")
+            st.plotly_chart(fig, config=PLOTLY_CONF)
+
+    # ── Système d'équilibre : 3 équations + résidus ────────────────────────
+    ar = np.radians(r['alpha'] + mod_trim.PHI_T)
+    res_v = r['FN'] * np.sin(ar) + r['L'] - r['weight']
+    res_h = r['FN'] * np.cos(ar) - r['D']
+    res_m = mod_trim.moment_total(model, r['alpha'], mach, r['dstab'], r['FN'],
+                                  r['q'], r['weight'], xcg, gamma)
     with st.container(border=True):
-        metrics_card("Forces & performances au point équilibré", [
-            metric(sym('<i>C</i><sub>L</sub>'), f"{r['CL']:.4f}"),
-            metric(sym('<i>C</i><sub>D</sub>'), f"{r['CD']:.5f}"),
-            metric("Finesse " + sym('<i>L</i>/<i>D</i>'), f"{r['finesse']:.2f}"),
-            metric(f"Poussée {sym('<i>F</i><sub>N</sub>')}",
-                   f"{r['FN']/1000:.1f}", "kN",
-                   f"{r['FN_engine']/1000:.1f} kN / moteur"),
-            metric(f"Débit {sym('<i>W</i><sub>F</sub>')}",
-                   f"{fr(r['WF_total_kgh'])}", "kg/h",
-                   f"{r['WF_total']:.3f} kg/s"),
-        ], cols=5, small=True, accent=acc_d)
+        st.markdown(
+            '<div class="dash-detgrid" style="grid-template-columns:1fr">'
+            + _dash_dcell("Portance · F_N·sin(α+φ_T) + L − mg₀ = 0",
+                          f"résidu {res_v:+.1f}", "N")
+            + _dash_dcell("Traînée · F_N·cos(α+φ_T) − D = 0",
+                          f"résidu {res_h:+.1f}", "N")
+            + _dash_dcell("Moment · M_aéro(α,δstab) + M_moteur(F_N) = 0",
+                          f"résidu {res_m:+.0f}", "N·m")
+            + '</div>', unsafe_allow_html=True)
 
-    ratios_strip([
-        (sym('Portance <i>L</i>'), f"{fr(r['L']/1000)} kN"),
-        (sym('Traînée <i>D</i>'), f"{fr(r['D']/1000)} kN"),
-        (sym('Poids <i>W</i> = <i>mg</i><sub>0</sub>'),
-         f"{fr(r['weight']/1000)} kN"),
-        (sym('Pression dyn. <i>q̄</i>'), f"{fr(r['q'])} Pa"),
-    ], accent=acc_d)
+    # ── Détail des itérations (ligne d'équilibre surlignée) ────────────────
+    with st.container(border=True):
+        st.markdown("**Détail des itérations**")
+        df_hist = pd.DataFrame([{
+            "it":          hh['it'],
+            "α [°]":       round(hh['alpha'], 3),
+            "δstab [°]":   round(hh['dstab'], 3),
+            "F_N [kN]":    round(hh['FN'] / 1000.0, 1),
+            "CL":          round(hh['CL'], 4),
+            "CD":          round(hh['CD'], 5),
+            "|Δα| [°]":    f"{hh['d_alpha']:.2e}",
+            "|ΔF_N| [N]":  f"{hh['d_FN']:.2e}",
+            "|Δδstab| [°]": f"{hh['d_dstab']:.2e}",
+        } for hh in hist])
+        _last = len(df_hist) - 1
 
-    with st.expander("Équations d'équilibre (palier)"):
-        st.latex(r"0 = F_N\sin(\alpha+\phi_T) + L - mg_0 \qquad "
-                 r"0 = F_N\cos(\alpha+\phi_T) - D")
-        st.latex(r"0 = M_{aero}(\alpha,\delta_{stab}) + M_{moteur}(F_N)"
-                 r"\qquad L = \bar q\,S_{wb}\,C_{L_s},\ \ "
-                 r"D = \bar q\,S_{wb}\,C_{D_s}")
-        st.caption("Résolution itérative (Ghazi & Botez) des trois inconnues "
-                   "α, δstab, F_N, puis inversion du modèle de poussée "
-                   "→ N1 → W_F.")
+        def _surligne_equilibre(row):
+            ok = r['converged'] and row.name == _last
+            return ["background-color: #DDF4E0; font-weight: 600" if ok else ""
+                    for _ in row]
 
-    # ── Graphiques : convergence + conditions d'équilibre ──────────────────
-    tab1, tab2 = st.tabs(["Convergence de l'algorithme", "Conditions d'équilibre"])
-
-    hist = np.array(r['history'])   # colonnes : it, α*, δstab*, F_N*, …
-    its = hist[:, 0]
-
-    with tab1:
-        fig = make_subplots(rows=1, cols=3,
-                            subplot_titles=("Incidence α [°]",
-                                            "Calage δstab [°]",
-                                            "Poussée F_N [kN]"))
-        series = [(hist[:, 1], r['alpha'], "α", "°", 1),
-                  (hist[:, 2], r['dstab'], "δstab", "°", 2),
-                  (hist[:, 3] / 1000.0, r['FN'] / 1000.0, "F_N", "kN", 3)]
-        for ys, conv, nom, unit, col in series:
-            fig.add_trace(go.Scatter(x=its, y=ys, mode="lines+markers",
-                                     line=dict(color=acc_d, width=2),
-                                     marker=dict(size=6),
-                                     showlegend=False,
-                                     hovertemplate=f"it %{{x:.0f}}<br>{nom} : "
-                                                   f"%{{y:.3f}} {unit}"
-                                                   "<extra></extra>"),
-                          row=1, col=col)
-            fig.add_hline(y=conv, line=dict(color=RED, width=1, dash="dot"),
-                          row=1, col=col)
-        fig.update_xaxes(title_text="Itération")
-        fig.update_layout(height=380, template="plotly_white",
-                          font=dict(family=FONT_UI),
-                          title="Convergence des trois inconnues "
-                                "(pointillé rouge = valeur finale)")
-        st.plotly_chart(fig, config=PLOTLY_CONF)
-
-    with tab2:
-        grid = model['f_clwb']
-        alphas = np.linspace(grid['x_alpha'][0], grid['x_alpha'][-1], 100)
-        cl_curve = [mod_aero.get_cl_total(model, a, mach, r['dstab'])
-                    for a in alphas]
-        cl_req = r['L'] / (r['q'] * mod_trim.S_WB)
-        dstabs = np.linspace(mod_trim.DSTAB_MIN, mod_trim.DSTAB_MAX, 100)
-        m_curve = [mod_trim.moment_total(model, r['alpha'], mach, d, r['FN'],
-                                         r['q'], r['weight'], xcg, gamma) / 1e6
-                   for d in dstabs]
-
-        fig = make_subplots(rows=1, cols=2,
-                            subplot_titles=(f"Portance — CL(α) à δstab = "
-                                            f"{r['dstab']:.2f}°",
-                                            f"Moment — M(δstab) à α = "
-                                            f"{r['alpha']:.2f}°"))
-        # CL vs α : courbe, CL requis (ligne), point d'équilibre
-        fig.add_trace(go.Scatter(x=alphas, y=cl_curve, mode="lines",
-                                 line=dict(color=acc_d, width=2),
-                                 showlegend=False,
-                                 hovertemplate="α %{x:.2f}°<br>CL %{y:.4f}"
-                                               "<extra></extra>"), row=1, col=1)
-        fig.add_hline(y=cl_req, line=dict(color="#8B93A1", width=1, dash="dash"),
-                      annotation_text="CL requis", annotation_position="top left",
-                      row=1, col=1)
-        fig.add_trace(go.Scatter(x=[r['alpha']], y=[cl_req],
-                                 mode="markers+text", marker=dict(color=RED, size=10),
-                                 text=[f"  α={r['alpha']:.2f}°"],
-                                 textposition="middle right",
-                                 textfont=dict(color=RED, family=FONT_MONO),
-                                 cliponaxis=False, showlegend=False,
-                                 hoverinfo="skip"), row=1, col=1)
-        # M vs δstab : courbe, zéro (ligne), point d'équilibre
-        fig.add_trace(go.Scatter(x=dstabs, y=m_curve, mode="lines",
-                                 line=dict(color=acc_d, width=2),
-                                 showlegend=False,
-                                 hovertemplate="δstab %{x:.2f}°<br>"
-                                               "M %{y:.3f} MN·m<extra></extra>"),
-                      row=1, col=2)
-        fig.add_hline(y=0.0, line=dict(color="#8B93A1", width=1, dash="dash"),
-                      row=1, col=2)
-        fig.add_trace(go.Scatter(x=[r['dstab']], y=[0.0],
-                                 mode="markers+text", marker=dict(color=RED, size=10),
-                                 text=[f"  δstab={r['dstab']:.2f}°"],
-                                 textposition="top right",
-                                 textfont=dict(color=RED, family=FONT_MONO),
-                                 cliponaxis=False, showlegend=False,
-                                 hoverinfo="skip"), row=1, col=2)
-        fig.update_xaxes(title_text="α [°]", row=1, col=1)
-        fig.update_xaxes(title_text="δstab [°]", row=1, col=2)
-        fig.update_yaxes(title_text="CL", row=1, col=1)
-        fig.update_yaxes(title_text="M total [MN·m]", row=1, col=2)
-        fig.update_layout(height=420, template="plotly_white",
-                          font=dict(family=FONT_UI))
-        st.plotly_chart(fig, config=PLOTLY_CONF)
+        st.dataframe(df_hist.style.apply(_surligne_equilibre, axis=1),
+                     hide_index=True, width="stretch")
+        if r['converged']:
+            st.caption("Ligne verte = itération d'équilibre (convergence atteinte).")
 
 
 # ---------------------------------------------------------------------------
@@ -1442,100 +1474,116 @@ def _img_b64(path, mtime):
 
 
 def apply_page_background():
-    """Image cockpit en fond de toutes les pages, sous un voile clair.
+    """Fond dégradé clair épuré (style iPad), sans image, teinté à l'accent
+    du module actif. Cartes en verre dépoli sur fond clair.
 
-    Les cartes passent en blanc translucide + flou (verre dépoli) pour
-    rester lisibles. CSS limité à des propriétés de fond — dégradation
-    sans risque si la structure DOM change.
+    CSS limité à des propriétés de fond — dégradation sans risque si la
+    structure DOM change.
     """
-    if not BG_IMG.exists():
-        return
-    b64 = _img_b64(str(BG_IMG), BG_IMG.stat().st_mtime)
-    # image bien présente à l'accueil, simple filigrane dans les modules
-    voile = .60 if st.session_state.get("nav", "Accueil") == "Accueil" else .90
+    nav = st.session_state.get("nav", "Accueil")
+    vif = ACCENTS.get(nav, (NAVY, "#3E6B99"))[1]
     st.markdown(f"""
     <style>
     [data-testid="stAppViewContainer"] {{
-        background: linear-gradient(rgba(247, 249, 252, {voile}),
-                                    rgba(247, 249, 252, {voile})),
-                    url("data:image/jpeg;base64,{b64}") center / cover
-                    no-repeat fixed;
+        background:
+          radial-gradient(120% 80% at 78% -10%, {vif}1A, transparent 55%),
+          linear-gradient(180deg, #EEF3FA 0%, #F3F6FA 42%, #EFF1F4 100%);
+        background-attachment: fixed;
     }}
     [data-testid="stHeader"] {{ background: transparent; }}
-    /* cartes en verre dépoli pour la lisibilité sur l'image */
+    /* cartes en verre dépoli sur le fond clair */
     [data-testid="stVerticalBlockBorderWrapper"] {{
-        background: rgba(255, 255, 255, .95);
-        -webkit-backdrop-filter: blur(8px);
-        backdrop-filter: blur(8px);
+        background: rgba(255, 255, 255, .72);
+        -webkit-backdrop-filter: blur(24px) saturate(180%);
+        backdrop-filter: blur(24px) saturate(180%);
+        border-radius: 16px;
+        box-shadow: 0 1px 2px rgba(16, 24, 40, .04),
+                    0 10px 30px rgba(16, 24, 40, .06);
     }}
     </style>
+    <div id="sb-hot"></div>
     """, unsafe_allow_html=True)
 
 
-def apply_sidebar_background():
-    """Image de flux d'air en fond de sidebar, texte passé en blanc.
+# Icônes (lucide) + couleur par module pour la nav latérale
+_NAV_ICONS = {
+    "Accueil": ('<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'
+                '<path d="M9 22V12h6v10"/>', "#9FB1CB"),
+    "Atmosphère": ('<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
+                   "#5AC8FA"),
+    "Conversion": ('<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/>'
+                   '<path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>', "#A78BFA"),
+    "Aérodynamique": ('<path d="M12.8 19.6A2 2 0 1 0 14 16H2"/>'
+                      '<path d="M17.5 8a2.5 2.5 0 1 1 2 4H2"/>'
+                      '<path d="M9.8 4.4A2 2 0 1 1 11 8H2"/>', "#4FD0C2"),
+    "Propulsion & Émissions": ('<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2'
+                               '-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 '
+                               '2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 '
+                               '1-3a2.5 2.5 0 0 0 2.5 2.5z"/>', "#FF9F0A"),
+    "Équilibrage (Trim)": ('<path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3'
+                           '-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13'
+                           '-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/>'
+                           '<path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>', "#5BD07A"),
+}
 
-    CSS volontairement confiné à [data-testid="stSidebar"] : on ne touche
-    ni aux polices ni à la visibilité d'éléments (cf. mésaventure des
-    icônes Material avec le CSS global).
-    """
-    if not SIDEBAR_IMG.exists():
-        return
-    b64 = _img_b64(str(SIDEBAR_IMG), SIDEBAR_IMG.stat().st_mtime)
-    # pastille de l'item actif : dégradé aux couleurs du module sélectionné
-    fonce, vif = ACCENTS.get(st.session_state.get("nav", "Accueil"),
-                             (NAVY, "#3E6B99"))
-    st.markdown(f"""
+
+def apply_sidebar_background():
+    """Ruban latéral façon maquette : dégradé navy, nav à icônes colorées,
+    barre d'accent sur l'item actif. CSS confiné à [data-testid="stSidebar"]."""
+    st.markdown("""
     <style>
-    [data-testid="stSidebar"] {{
-        background: linear-gradient(rgba(9, 21, 38, .68),
-                                    rgba(9, 21, 38, .68)),
-                    url("data:image/jpeg;base64,{b64}") center / cover
-                    no-repeat;
-    }}
-    [data-testid="stSidebarContent"] {{ background: transparent !important; }}
-    [data-testid="stSidebar"] h1,
-    [data-testid="stSidebar"] label,
-    [data-testid="stSidebar"] p,
-    [data-testid="stSidebar"] span {{ color: #FFFFFF !important; }}
-    [data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {{
-        color: rgba(255, 255, 255, .78) !important;
-    }}
-    /* bloc marque + label MODULE (couleurs pour fond sombre) */
-    .sb-title {{ color: #FFFFFF; }}
-    .sb-sub {{ color: rgba(255, 255, 255, .75); }}
-    .sb-label {{ color: rgba(255, 255, 255, .55); }}
-    /* items de nav : pastille translucide sur l'item actif + survol */
-    [data-testid="stSidebar"] label[data-baseweb="radio"] {{
-        width: 100%; padding: 8px 12px; margin: 1px 0; border-radius: 8px;
-        transition: background .12s;
-    }}
-    [data-testid="stSidebar"] label[data-baseweb="radio"]:hover {{
-        background: rgba(255, 255, 255, .08);
-    }}
-    [data-testid="stSidebar"] label[data-baseweb="radio"]:has(input:checked) {{
-        background: linear-gradient(135deg, {fonce}, {vif});
-    }}
-    [data-testid="stSidebar"] [role="radiogroup"] p {{
-        font-size: 14.5px; font-weight: 600;
-    }}
-    [data-testid="stSidebar"] label[data-baseweb="radio"]:not(:has(input:checked)) p {{
-        color: rgba(255, 255, 255, .72) !important;
-    }}
-    /* pied de sidebar : pousser le dernier élément (caption) tout en bas */
-    [data-testid="stSidebarContent"] {{ display: flex; flex-direction: column; }}
-    [data-testid="stSidebarUserContent"] {{
-        flex: 1 1 auto; display: flex; flex-direction: column;
-    }}
-    [data-testid="stSidebarUserContent"] > div {{ flex: 1; }}
-    [data-testid="stSidebarUserContent"] [data-testid="stVerticalBlock"] {{
-        height: 100%;
-    }}
-    [data-testid="stSidebarUserContent"] [data-testid="stVerticalBlock"]
-    > div:last-child {{
-        margin-top: auto; padding-top: 14px;
-        border-top: 1px solid rgba(255, 255, 255, .18);
-    }}
+    [data-testid="stSidebar"] {
+        background:
+          radial-gradient(420px 300px at 24% 6%, rgba(120,165,225,.16), transparent 70%),
+          radial-gradient(520px 420px at 80% 102%, rgba(255,159,10,.10), transparent 70%),
+          linear-gradient(176deg, #122844 0%, #0C1C33 52%, #091322 100%) !important;
+    }
+    [data-testid="stSidebarContent"], [data-testid="stSidebarUserContent"] {
+        background: transparent !important; }
+    /* marque */
+    .sb-brand { display:flex; align-items:center; gap:13px; padding:14px 4px 12px; }
+    .sb-badge { width:46px; height:46px; border-radius:13px; display:grid;
+        place-items:center; font-family:ui-monospace,"SF Mono",monospace;
+        font-size:16px; font-weight:600; letter-spacing:-.02em; color:#DBE6F5;
+        background:linear-gradient(160deg, rgba(255,255,255,.16), rgba(255,255,255,.03));
+        border:1px solid rgba(255,255,255,.16);
+        box-shadow:inset 0 1px 0 rgba(255,255,255,.18), 0 4px 12px rgba(0,0,0,.25); }
+    .sb-name { font-size:15px; font-weight:600; letter-spacing:-.01em; color:#fff; }
+    .sb-role { font-size:12.5px; color:#8EA2BD; margin-top:1px; }
+    .sb-seclabel { font-size:10.5px; font-weight:700; letter-spacing:.16em;
+        color:#5D728F; text-transform:uppercase; padding:8px 8px 6px; }
+    /* items de nav (liens) */
+    .sb-nav { display:flex; flex-direction:column; gap:3px; padding-left:6px; }
+    a.sb-item { --c:#93A6C1; position:relative; display:flex; align-items:center;
+        gap:13px; height:44px; padding:0 12px; border-radius:11px; color:#B7C6DC;
+        text-decoration:none !important; border:1px solid transparent;
+        transition:background .16s, color .16s, border-color .16s; }
+    a.sb-item .ico { width:22px; height:22px; display:grid; place-items:center;
+        color:var(--c); flex:0 0 auto; }
+    a.sb-item .ico svg { width:20px; height:20px; }
+    a.sb-item .lbl { font-size:14.5px; font-weight:500; letter-spacing:-.01em;
+        color:inherit; }
+    a.sb-item:hover { background:rgba(255,255,255,.055); color:#E6EEFB; }
+    a.sb-item.active { background:linear-gradient(180deg, rgba(255,255,255,.13),
+        rgba(255,255,255,.06)); border-color:rgba(255,255,255,.13); color:#fff;
+        box-shadow:inset 0 1px 0 rgba(255,255,255,.14), 0 6px 16px -8px rgba(0,0,0,.5); }
+    a.sb-item.active .lbl { font-weight:600; }
+    a.sb-item.active::before { content:""; position:absolute; left:-6px; top:50%;
+        transform:translateY(-50%); width:4px; height:22px; border-radius:0 3px 3px 0;
+        background:var(--c); box-shadow:0 0 12px var(--c); }
+    /* pied ÉTS, collé en bas */
+    .sb-foot { margin-top:auto; padding:16px 4px 6px;
+        border-top:1px solid rgba(255,255,255,.07); }
+    .sb-foot .ft { font-size:12px; color:#8A9CB6; line-height:1.45; }
+    .sb-foot .fm { display:inline-flex; align-items:center; gap:6px; margin-top:9px;
+        font-family:ui-monospace,"SF Mono",monospace; font-size:11px; color:#6F829C;
+        padding:4px 9px; border-radius:7px; background:rgba(255,255,255,.05);
+        border:1px solid rgba(255,255,255,.07); }
+    .sb-foot .fm .pip { width:6px; height:6px; border-radius:50%; background:#5BD07A;
+        box-shadow:0 0 7px #5BD07A; }
+    /* remplir la hauteur pour coller le pied en bas */
+    [data-testid="stSidebarUserContent"] { display:flex; flex-direction:column;
+        min-height:calc(100vh - 2rem); }
     </style>
     """, unsafe_allow_html=True)
 
@@ -1549,30 +1597,34 @@ if "page" in st.query_params:
 
 apply_page_background()
 apply_sidebar_background()
-st.sidebar.markdown("""
-<style>
-.sb-brand { display: flex; align-items: center; gap: 12px; margin: 4px 0 18px; }
-.sb-mark { width: 44px; height: 44px; border-radius: 11px; background: #1B3A5C;
-           border: 1px solid rgba(255, 255, 255, .25); color: #fff;
-           display: grid; place-items: center; font-weight: 700;
-           font-size: 14px; letter-spacing: .02em; }
-.sb-title { font-size: 16px; font-weight: 700; letter-spacing: -.01em; }
-.sb-sub { font-size: 12.5px; margin-top: 1px; }
-.sb-label { font-size: 11px; font-weight: 700; text-transform: uppercase;
-            letter-spacing: .09em; margin: 0 0 4px 2px; }
-</style>
-<div class="sb-brand">
-  <div class="sb-mark">380</div>
-  <div>
-    <div class="sb-title">A380 — MGA803</div>
-    <div class="sb-sub">Performances avion</div>
-  </div>
-</div>
-<div class="sb-label">Module</div>
-""", unsafe_allow_html=True)
-choix_page = st.sidebar.radio("Module", list(PAGES), key="nav",
-                              label_visibility="collapsed")
-st.sidebar.caption("Analyse et optimisation des performances des avions — "
-                   "ÉTS, É2026")
+
+# Module actif (piloté par les liens ?page= ci-dessous, défaut Accueil)
+choix_page = st.session_state.get("nav", "Accueil")
+if choix_page not in PAGES:
+    choix_page = "Accueil"
+
+# Navigation : items HTML avec icône colorée par module (liens ?page=)
+_items = ""
+for _name in PAGES:
+    _icon, _color = _NAV_ICONS.get(_name, ("", "#93A6C1"))
+    _cls = "sb-item active" if _name == choix_page else "sb-item"
+    _items += (
+        f'<a class="{_cls}" style="--c:{_color}" target="_self" '
+        f'href="?page={quote(_name)}">'
+        f'<span class="ico"><svg viewBox="0 0 24 24" fill="none" '
+        f'stroke="currentColor" stroke-width="1.9" stroke-linecap="round" '
+        f'stroke-linejoin="round">{_icon}</svg></span>'
+        f'<span class="lbl">{_name}</span></a>')
+
+st.sidebar.markdown(
+    '<div class="sb-brand"><div class="sb-badge">380</div>'
+    '<div><div class="sb-name">A380 — MGA803</div>'
+    '<div class="sb-role">Performances avion</div></div></div>'
+    '<div class="sb-seclabel">Module</div>'
+    f'<nav class="sb-nav">{_items}</nav>'
+    '<div class="sb-foot"><div class="ft">Analyse et optimisation des '
+    'performances des avions</div>'
+    '<div class="fm"><span class="pip"></span>ÉTS · É2026</div></div>',
+    unsafe_allow_html=True)
 
 PAGES[choix_page]()

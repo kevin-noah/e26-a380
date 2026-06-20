@@ -262,7 +262,17 @@ def trim(mass, mach, altitude, delta_isa=0.0, x_cg=0.40, gamma=0.0,
         d_alpha = abs(alpha - alpha_star)
         d_fn    = abs(fn - fn_star)
         d_dstab = abs(dstab - dstab_star)
-        history.append((it, alpha_star, dstab_star, fn_star, d_alpha, d_fn, d_dstab))
+        history.append({
+            'it':      it,
+            'alpha':   alpha_star,
+            'dstab':   dstab_star,
+            'FN':      fn_star,
+            'CL':      cl_s,
+            'CD':      cd_s,
+            'd_alpha': d_alpha,
+            'd_FN':    d_fn,
+            'd_dstab': d_dstab,
+        })
         if verbose:
             print(f"  it {it:2d}  α={alpha_star:7.3f}°  δstab={dstab_star:7.3f}°  "
                   f"F_N={fn_star:11.1f} N  |Δα|={d_alpha:.2e} "
