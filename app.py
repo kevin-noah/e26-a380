@@ -21,6 +21,7 @@ import atmosphere as mod_atm
 import conversion as mod_conv
 import aerodynamics as mod_aero
 import propulsion as mod_prop
+import trim as mod_trim
 
 KT = 0.514444   # 1 kt en m/s
 FT = 0.3048     # 1 ft en m
@@ -449,8 +450,9 @@ def page_accueil():
         ("04", "Propulsion & Émissions", True,
          "Poussée F<sub>N</sub>, débit carburant W<sub>F</sub> (Trent 970) "
          "et émissions OACI (méthode Boeing Fuel Flow)."),
-        ("05", "Équilibrage (Trim)", False,
-         "Équilibrage longitudinal de l'avion."),
+        ("05", "Équilibrage (Trim)", True,
+         "Équilibrage longitudinal : α, δstab et F_N par l'algorithme de "
+         "Ghazi & Botez, puis N1 et débit carburant W<sub>F</sub>."),
     ]
     cards = ""
     for num, nom, dispo, desc in modules:
@@ -1220,10 +1222,202 @@ def page_prop():
 
 
 def page_trim():
+    acc_d, acc_v = ACCENTS["Équilibrage (Trim)"]
     page_head("Module d'équilibrage (Trim)",
-              accent=ACCENTS["Équilibrage (Trim)"][1])
-    st.info("Module en développement — à venir : équilibrage longitudinal "
-            "de l'avion à partir des modules aérodynamique et propulsion.")
+              "Équilibrage longitudinal en palier : résolution couplée de "
+              "l'incidence α, du calage du stabilisateur δstab et de la poussée "
+              "F_N (algorithme itératif de Ghazi & Botez), puis inversion du "
+              "modèle moteur vers le régime N1 et le débit carburant W_F.",
+              accent=acc_v)
+
+    _init_slider("trim_mass", 350.0)
+    _init_slider("trim_mach", 0.55)
+    _init_slider("trim_h", 2000.0)
+    _init_slider("trim_disa", 0.0)
+    _init_slider("trim_xcg", 0.40)
+    _init_slider("trim_gamma", 0.0)
+
+    c_main, c_panel = ruban_saisie("trim_ruban")
+    with c_main:
+        with st.container(border=True,
+                          height="stretch" if c_panel is not None else "content"):
+            c1, c2 = st.columns(2)
+            c1.slider(r"Masse $m$ [t]", 300.0, 560.0, step=5.0,
+                      key="trim_mass_slider")
+            c2.slider(r"Mach $M$", 0.20, 0.85, step=0.01,
+                      key="trim_mach_slider")
+            c1.slider(r"Altitude $h$ [m]", 0.0, 12000.0, step=50.0,
+                      key="trim_h_slider")
+            c2.slider(r"$\Delta_{ISA}$ [°C]", -30.0, 30.0, step=1.0,
+                      key="trim_disa_slider")
+            c1.slider(r"Centrage $x_{cg}$ [MAC]", 0.0, 0.50, step=0.01,
+                      key="trim_xcg_slider")
+            c2.slider(r"Pente $\gamma$ [°]", -5.0, 10.0, step=0.5,
+                      key="trim_gamma_slider")
+            mass = float(st.session_state.trim_mass_slider) * 1000.0
+            mach = float(st.session_state.trim_mach_slider)
+            h = float(st.session_state.trim_h_slider)
+            disa = float(st.session_state.trim_disa_slider)
+            xcg = float(st.session_state.trim_xcg_slider)
+            gamma = float(st.session_state.trim_gamma_slider)
+    if c_panel is not None:
+        with c_panel:
+            carte_saisie([
+                (r"Masse $m$ [t]", 300.0, 560.0, 5.0, "trim_mass"),
+                (r"Mach $M$", 0.20, 0.85, 0.01, "trim_mach"),
+                (r"Altitude $h$", 0.0, 12000.0,
+                 {"m": (1.0, 100.0), "ft": (FT, 500.0)}, "trim_h"),
+                (r"$\Delta_{ISA}$ [°C]", -30.0, 30.0, 1.0, "trim_disa"),
+                (r"Centrage $x_{cg}$ [MAC]", 0.0, 0.50, 0.01, "trim_xcg"),
+                (r"Pente $\gamma$ [°]", -5.0, 10.0, 0.5, "trim_gamma"),
+            ])
+
+    model = load_aero_model()
+    try:
+        r = mod_trim.trim(mass, mach, h, delta_isa=disa, x_cg=xcg,
+                          gamma=gamma, model=model)
+    except ValueError as e:
+        st.warning(f"**Pas d'équilibre trouvé à ce point de vol.**\n\n{e}\n\n"
+                   "L'avion est probablement *limité en poussée* : à cette "
+                   "altitude/ce Mach, la poussée disponible ne couvre pas la "
+                   "traînée. Essaie une **altitude plus basse**, un **Mach "
+                   "plus faible** ou une **masse réduite**. Rappel : le modèle "
+                   "aéro est calibré jusqu'à M ≈ 0.7 (finesse max ≈ 10).")
+        return
+
+    if not r['converged']:
+        st.warning(f"Algorithme non convergé en {r['iterations']} itérations "
+                   "— résultats indicatifs.")
+
+    # ── Paramètres d'équilibrage (les 3 inconnues + régime) ────────────────
+    with st.container(border=True):
+        metrics_card("Paramètres d'équilibrage", [
+            metric(f"Incidence {sym('<i>α</i>')}", f"{r['alpha']:.2f}", "°"),
+            metric(f"Calage stab. {sym('<i>δ</i><sub>stab</sub>')}",
+                   f"{r['dstab']:.2f}", "°"),
+            metric(f"Régime {sym('<i>N</i>1')}", f"{r['N1']:.1f}", "%",
+                   f"convergé en {r['iterations']} it."),
+        ], cols=3, small=True, accent=acc_d)
+
+    # ── Forces, finesse, poussée, carburant ────────────────────────────────
+    with st.container(border=True):
+        metrics_card("Forces & performances au point équilibré", [
+            metric(sym('<i>C</i><sub>L</sub>'), f"{r['CL']:.4f}"),
+            metric(sym('<i>C</i><sub>D</sub>'), f"{r['CD']:.5f}"),
+            metric("Finesse " + sym('<i>L</i>/<i>D</i>'), f"{r['finesse']:.2f}"),
+            metric(f"Poussée {sym('<i>F</i><sub>N</sub>')}",
+                   f"{r['FN']/1000:.1f}", "kN",
+                   f"{r['FN_engine']/1000:.1f} kN / moteur"),
+            metric(f"Débit {sym('<i>W</i><sub>F</sub>')}",
+                   f"{fr(r['WF_total_kgh'])}", "kg/h",
+                   f"{r['WF_total']:.3f} kg/s"),
+        ], cols=5, small=True, accent=acc_d)
+
+    ratios_strip([
+        (sym('Portance <i>L</i>'), f"{fr(r['L']/1000)} kN"),
+        (sym('Traînée <i>D</i>'), f"{fr(r['D']/1000)} kN"),
+        (sym('Poids <i>W</i> = <i>mg</i><sub>0</sub>'),
+         f"{fr(r['weight']/1000)} kN"),
+        (sym('Pression dyn. <i>q̄</i>'), f"{fr(r['q'])} Pa"),
+    ], accent=acc_d)
+
+    with st.expander("Équations d'équilibre (palier)"):
+        st.latex(r"0 = F_N\sin(\alpha+\phi_T) + L - mg_0 \qquad "
+                 r"0 = F_N\cos(\alpha+\phi_T) - D")
+        st.latex(r"0 = M_{aero}(\alpha,\delta_{stab}) + M_{moteur}(F_N)"
+                 r"\qquad L = \bar q\,S_{wb}\,C_{L_s},\ \ "
+                 r"D = \bar q\,S_{wb}\,C_{D_s}")
+        st.caption("Résolution itérative (Ghazi & Botez) des trois inconnues "
+                   "α, δstab, F_N, puis inversion du modèle de poussée "
+                   "→ N1 → W_F.")
+
+    # ── Graphiques : convergence + conditions d'équilibre ──────────────────
+    tab1, tab2 = st.tabs(["Convergence de l'algorithme", "Conditions d'équilibre"])
+
+    hist = np.array(r['history'])   # colonnes : it, α*, δstab*, F_N*, …
+    its = hist[:, 0]
+
+    with tab1:
+        fig = make_subplots(rows=1, cols=3,
+                            subplot_titles=("Incidence α [°]",
+                                            "Calage δstab [°]",
+                                            "Poussée F_N [kN]"))
+        series = [(hist[:, 1], r['alpha'], "α", "°", 1),
+                  (hist[:, 2], r['dstab'], "δstab", "°", 2),
+                  (hist[:, 3] / 1000.0, r['FN'] / 1000.0, "F_N", "kN", 3)]
+        for ys, conv, nom, unit, col in series:
+            fig.add_trace(go.Scatter(x=its, y=ys, mode="lines+markers",
+                                     line=dict(color=acc_d, width=2),
+                                     marker=dict(size=6),
+                                     showlegend=False,
+                                     hovertemplate=f"it %{{x:.0f}}<br>{nom} : "
+                                                   f"%{{y:.3f}} {unit}"
+                                                   "<extra></extra>"),
+                          row=1, col=col)
+            fig.add_hline(y=conv, line=dict(color=RED, width=1, dash="dot"),
+                          row=1, col=col)
+        fig.update_xaxes(title_text="Itération")
+        fig.update_layout(height=380, template="plotly_white",
+                          font=dict(family=FONT_UI),
+                          title="Convergence des trois inconnues "
+                                "(pointillé rouge = valeur finale)")
+        st.plotly_chart(fig, config=PLOTLY_CONF)
+
+    with tab2:
+        grid = model['f_clwb']
+        alphas = np.linspace(grid['x_alpha'][0], grid['x_alpha'][-1], 100)
+        cl_curve = [mod_aero.get_cl_total(model, a, mach, r['dstab'])
+                    for a in alphas]
+        cl_req = r['L'] / (r['q'] * mod_trim.S_WB)
+        dstabs = np.linspace(mod_trim.DSTAB_MIN, mod_trim.DSTAB_MAX, 100)
+        m_curve = [mod_trim.moment_total(model, r['alpha'], mach, d, r['FN'],
+                                         r['q'], r['weight'], xcg, gamma) / 1e6
+                   for d in dstabs]
+
+        fig = make_subplots(rows=1, cols=2,
+                            subplot_titles=(f"Portance — CL(α) à δstab = "
+                                            f"{r['dstab']:.2f}°",
+                                            f"Moment — M(δstab) à α = "
+                                            f"{r['alpha']:.2f}°"))
+        # CL vs α : courbe, CL requis (ligne), point d'équilibre
+        fig.add_trace(go.Scatter(x=alphas, y=cl_curve, mode="lines",
+                                 line=dict(color=acc_d, width=2),
+                                 showlegend=False,
+                                 hovertemplate="α %{x:.2f}°<br>CL %{y:.4f}"
+                                               "<extra></extra>"), row=1, col=1)
+        fig.add_hline(y=cl_req, line=dict(color="#8B93A1", width=1, dash="dash"),
+                      annotation_text="CL requis", annotation_position="top left",
+                      row=1, col=1)
+        fig.add_trace(go.Scatter(x=[r['alpha']], y=[cl_req],
+                                 mode="markers+text", marker=dict(color=RED, size=10),
+                                 text=[f"  α={r['alpha']:.2f}°"],
+                                 textposition="middle right",
+                                 textfont=dict(color=RED, family=FONT_MONO),
+                                 cliponaxis=False, showlegend=False,
+                                 hoverinfo="skip"), row=1, col=1)
+        # M vs δstab : courbe, zéro (ligne), point d'équilibre
+        fig.add_trace(go.Scatter(x=dstabs, y=m_curve, mode="lines",
+                                 line=dict(color=acc_d, width=2),
+                                 showlegend=False,
+                                 hovertemplate="δstab %{x:.2f}°<br>"
+                                               "M %{y:.3f} MN·m<extra></extra>"),
+                      row=1, col=2)
+        fig.add_hline(y=0.0, line=dict(color="#8B93A1", width=1, dash="dash"),
+                      row=1, col=2)
+        fig.add_trace(go.Scatter(x=[r['dstab']], y=[0.0],
+                                 mode="markers+text", marker=dict(color=RED, size=10),
+                                 text=[f"  δstab={r['dstab']:.2f}°"],
+                                 textposition="top right",
+                                 textfont=dict(color=RED, family=FONT_MONO),
+                                 cliponaxis=False, showlegend=False,
+                                 hoverinfo="skip"), row=1, col=2)
+        fig.update_xaxes(title_text="α [°]", row=1, col=1)
+        fig.update_xaxes(title_text="δstab [°]", row=1, col=2)
+        fig.update_yaxes(title_text="CL", row=1, col=1)
+        fig.update_yaxes(title_text="M total [MN·m]", row=1, col=2)
+        fig.update_layout(height=420, template="plotly_white",
+                          font=dict(family=FONT_UI))
+        st.plotly_chart(fig, config=PLOTLY_CONF)
 
 
 # ---------------------------------------------------------------------------

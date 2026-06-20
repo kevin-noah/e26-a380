@@ -28,7 +28,7 @@ MODULES = [
     {"id": 2, "cle": "conv", "module": mod_conv,  "dispo": True},
     {"id": 3, "cle": "aero", "module": mod_aero,  "dispo": True},
     {"id": 4, "cle": "prop", "module": mod_prop,  "dispo": True},
-    {"id": 5, "cle": "trim", "module": mod_trim,  "dispo": False},
+    {"id": 5, "cle": "trim", "module": mod_trim,  "dispo": True},
 ]
 
 
@@ -694,6 +694,134 @@ def loop_prop():
             pass
 
 
+# ============================== MODULE ÉQUILIBRAGE (TRIM) =====================
+
+def print_trim_menu():
+    print()
+    print("─" * 64)
+    print(f"  {mod_trim.NOM}")
+    print("─" * 64)
+    print("  Équilibrage longitudinal en palier — résout (α, δstab, F_N) puis")
+    print("  remonte au régime N1 et au débit carburant W_F.")
+    print()
+    print("  trim --mass <kg> --mach <M> --h <alt> [--disa <v>] [--xcg <f>] [--gamma <d>]")
+    print("       Équilibre l'avion pour la masse, le Mach et l'altitude donnés")
+    print("       --xcg   : centrage (fraction de MAC, défaut 0.40)")
+    print("       --gamma : pente de trajectoire [deg] (défaut 0 = palier)")
+    print()
+    print("  info   Constantes du modèle (φ_T, positions moteurs, F_N^max, W_F^max…)")
+    print("  help   Afficher cette aide")
+    print("  back   Retour au menu principal")
+    print("─" * 64)
+    print()
+
+
+def _build_trim_parser():
+    parser = _SilentParser(prog="")
+    sub    = parser.add_subparsers(dest="cmd")
+    sub.required = True
+
+    p = sub.add_parser("trim")
+    p.add_argument("--mass",  type=float, required=True, metavar="MASSE")
+    p.add_argument("--mach",  type=float, required=True, metavar="MACH")
+    p.add_argument("--h",     type=float, required=True, metavar="ALTITUDE")
+    p.add_argument("--disa",  type=float, default=0.0,   metavar="ΔISA")
+    p.add_argument("--xcg",   type=float, default=0.40,  metavar="FRAC")
+    p.add_argument("--gamma", type=float, default=0.0,   metavar="DEG")
+
+    sub.add_parser("info")
+    return parser
+
+
+def _print_trim_result(r, args):
+    """Affiche le résultat d'un équilibrage."""
+    statut = "convergé" if r['converged'] else "NON convergé"
+    print()
+    print("=" * 56)
+    print(f"  Équilibrage  |  m = {args.mass/1000:.1f} t   M = {args.mach:.3f}   "
+          f"h = {args.h:.0f} m")
+    print(f"  ΔISA = {args.disa:+.1f} °C   x_cg = {args.xcg:.2f} MAC   "
+          f"γ = {args.gamma:+.1f} °")
+    print(f"  {statut} en {r['iterations']} itérations")
+    print("─" * 56)
+    print(f"  {'α (incidence)':<22} = {r['alpha']:>10.3f}  °")
+    print(f"  {'δstab (calage THS)':<22} = {r['dstab']:>10.3f}  °")
+    print("─" * 56)
+    print(f"  {'CL':<22} = {r['CL']:>10.4f}")
+    print(f"  {'CD':<22} = {r['CD']:>10.5f}")
+    print(f"  {'Finesse L/D':<22} = {r['finesse']:>10.2f}")
+    print(f"  {'Portance L':<22} = {r['L']:>10.0f}  N")
+    print(f"  {'Traînée D':<22} = {r['D']:>10.0f}  N")
+    print("─" * 56)
+    print(f"  {'Poussée F_N (total)':<22} = {r['FN']:>10.0f}  N   "
+          f"({r['FN']/1000:.1f} kN)")
+    print(f"  {'F_N par moteur':<22} = {r['FN_engine']:>10.0f}  N   "
+          f"({r['FN_engine']/1000:.1f} kN)")
+    print(f"  {'Régime N1':<22} = {r['N1']:>10.2f}  %")
+    print(f"  {'Débit W_F (total)':<22} = {r['WF_total']:>10.4f}  kg/s "
+          f"({r['WF_total_kgh']:.0f} kg/h)")
+    print("=" * 56)
+    print()
+
+
+def loop_trim():
+    """Boucle interactive du module d'équilibrage."""
+    print_trim_menu()
+    parser = _build_trim_parser()
+    _model = [None]   # modèle aéro conservé entre les commandes
+
+    while True:
+        try:
+            ligne = input("  TRIM> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+
+        if not ligne:
+            continue
+        if ligne.lower() in ("back", "menu", "b"):
+            break
+        if ligne.lower() in ("help", "aide", "?"):
+            print_trim_menu()
+            continue
+
+        try:
+            args = parser.parse_args(shlex.split(ligne))
+
+            if args.cmd == "info":
+                print()
+                print("=" * 56)
+                print("  Constantes du modèle d'équilibrage")
+                print("─" * 56)
+                print(f"  φ_T (inclinaison poussée)   = {mod_trim.PHI_T:.2f} °")
+                print(f"  c̄_w (corde aéro moyenne)    = {mod_trim.C_W:.2f} m")
+                print(f"  Moteurs 2-3 (intérieurs)    x = {mod_trim.X_ENG_23:.2f} m   "
+                      f"z = {mod_trim.Z_ENG_23:.2f} m")
+                print(f"  Moteurs 1-4 (extérieurs)    x = {mod_trim.X_ENG_14:.2f} m   "
+                      f"z = {mod_trim.Z_ENG_14:.2f} m")
+                print(f"  F_N^max (par moteur)        = {mod_trim.FN_MAX/1000:.2f} kN")
+                print(f"  W_F^max (par moteur)        = {mod_trim.WF_MAX_KGH:.1f} kg/h")
+                print(f"  Convergence : ε_α = {mod_trim.EPS_ALPHA:g} °   "
+                      f"ε_δstab = {mod_trim.EPS_DSTAB:g} °   ε_FN = {mod_trim.EPS_FN:g} N")
+                print("=" * 56)
+                print()
+                continue
+
+            # args.cmd == "trim"
+            if _model[0] is None:
+                print("  Chargement du modèle aérodynamique ...")
+                _model[0] = mod_aero.build_aero_model()
+            r = mod_trim.trim(args.mass, args.mach, args.h,
+                              delta_isa=args.disa, x_cg=args.xcg,
+                              gamma=args.gamma, model=_model[0])
+            _print_trim_result(r, args)
+
+        except (ValueError, FileNotFoundError) as e:
+            print(f"  Erreur : {e}\n")
+        except SystemExit:
+            pass
+
+
 # ============================== MODULES EN DÉVELOPPEMENT ======================
 
 def loop_dev(module):
@@ -713,7 +841,7 @@ _LOOPS = {
     "conv": loop_conv,
     "aero": loop_aero,
     "prop": loop_prop,
-    "trim": lambda: loop_dev(mod_trim),
+    "trim": loop_trim,
 }
 
 
