@@ -236,14 +236,27 @@ def trim(mass, mach, altitude, delta_isa=0.0, x_cg=0.40, gamma=0.0,
     q   = 0.5 * rho * V**2
     weight = mass * G0
 
-    # Estimé initial : α = 0°, δstab = 0°, F_N = 40 % de la poussée max
-    fn_max_total = N_ENGINES * _thrust_N(N1_MAX, mach, altitude, delta_isa)
+    # Estimé initial (it. 0) : α = 0°, δstab = 0°, F_N⁰ = 40 % de F_N^max
+    # F_N^max est la poussée max statique des 4 moteurs (4 × 352.9 kN ≈ 1411 kN),
+    # pas la poussée disponible déclassée en altitude → F_N⁰ ≈ 565 kN.
+    fn_max_total = N_ENGINES * FN_MAX
     alpha = 0.0
     dstab = 0.0
     fn    = 0.40 * fn_max_total
 
     converged = False
-    history = []
+    # Itération 0 : point de départ de l'algorithme (avant toute résolution).
+    history = [{
+        'it':      0,
+        'alpha':   alpha,
+        'dstab':   dstab,
+        'FN':      fn,
+        'CL':      None,
+        'CD':      None,
+        'd_alpha': None,
+        'd_FN':    None,
+        'd_dstab': None,
+    }]
 
     for it in range(1, MAX_ITER + 1):
         # 1. Portance nécessaire pour équilibrer le poids (palier)
@@ -295,11 +308,22 @@ def trim(mass, mach, altitude, delta_isa=0.0, x_cg=0.40, gamma=0.0,
     D = q * S_WB * cd_s
     finesse = cl_s / cd_s if cd_s != 0 else float('inf')
 
-    # Inversion de la poussée → N1 → débit carburant
+    # Inversion de la poussée → N1 → débit carburant.
+    # Si la poussée requise dépasse la poussée max disponible (avion limité en
+    # poussée à ce point de vol), l'équilibre aéro reste valide (α, δstab, F_N,
+    # historique) mais N1/W_F ne sont pas définissables → on les laisse à None
+    # et on lève un drapeau, sans planter, pour que l'app/CLI affichent quand
+    # même le résultat et le tableau d'itérations.
     fn_engine = fn / N_ENGINES
-    n1 = n1_from_thrust(fn_engine, mach, altitude, delta_isa)
-    wf_engine = _fuel_flow_kgs(n1, mach, altitude, delta_isa)   # [kg/s]
-    wf_total  = N_ENGINES * wf_engine                            # [kg/s]
+    thrust_limited = False
+    n1 = wf_engine = wf_total = wf_total_kgh = None
+    try:
+        n1 = n1_from_thrust(fn_engine, mach, altitude, delta_isa)
+        wf_engine = _fuel_flow_kgs(n1, mach, altitude, delta_isa)   # [kg/s]
+        wf_total  = N_ENGINES * wf_engine                            # [kg/s]
+        wf_total_kgh = wf_total * 3600.0                             # [kg/h]
+    except ValueError:
+        thrust_limited = True
 
     return {
         'alpha':      alpha,
@@ -307,9 +331,9 @@ def trim(mass, mach, altitude, delta_isa=0.0, x_cg=0.40, gamma=0.0,
         'FN':         fn,
         'FN_engine':  fn_engine,
         'N1':         n1,
-        'WF_engine':  wf_engine,           # [kg/s]
-        'WF_total':   wf_total,            # [kg/s]
-        'WF_total_kgh': wf_total * 3600.0,  # [kg/h]
+        'WF_engine':  wf_engine,           # [kg/s]  (None si limité en poussée)
+        'WF_total':   wf_total,            # [kg/s]  (None si limité en poussée)
+        'WF_total_kgh': wf_total_kgh,      # [kg/h]  (None si limité en poussée)
         'CL':         cl_s,
         'CD':         cd_s,
         'L':          L,
@@ -320,6 +344,7 @@ def trim(mass, mach, altitude, delta_isa=0.0, x_cg=0.40, gamma=0.0,
         'weight':     weight,
         'iterations': it,
         'converged':  converged,
+        'thrust_limited': thrust_limited,
         'eps_alpha':  eps_alpha,
         'eps_fn':     eps_fn,
         'eps_dstab':  eps_dstab,

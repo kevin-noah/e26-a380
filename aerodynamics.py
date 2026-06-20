@@ -15,10 +15,15 @@ Dépendances : numpy, pandas, scipy  (matplotlib pour la visualisation)
 import os
 import numpy as np
 import pandas as pd
-from scipy.interpolate import RectBivariateSpline
+from scipy.interpolate import RectBivariateSpline, CubicSpline
 
 NOM         = "Module Aérodynamique"
 DESCRIPTION = "CL, CD, Cm en fonction de α et Mach — A380 (OpenVSP)"
+
+# Mach au-delà duquel les données VSPAERO (méthode de panneaux non visqueuse)
+# deviennent non physiques en transsonique : le CD chute au lieu de monter
+# (traînée d'onde). On les remplace par une extrapolation spline du domaine fiable.
+MACH_CUT = 0.7
 
 # Chemin par défaut vers les fichiers de données (dossier data/ du projet)
 _DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
@@ -83,7 +88,7 @@ def load_history(filename):
 # Construction du modèle d'interpolation
 # ---------------------------------------------------------------------------
 
-def _build_grid(df, col):
+def _build_grid(df, col, extrapolate=False):
     """
     Construit une grille d'interpolation 2D pour la colonne `col`.
 
@@ -92,6 +97,12 @@ def _build_grid(df, col):
         y_mach   — vecteur des nombres de Mach
         value    — matrice (n_alpha × n_mach)
         _interp  — RectBivariateSpline pour l'interpolation bicubique
+
+    `extrapolate=True` (réservé au Wing-Body) : au-delà de MACH_CUT, les données
+    VSPAERO transsoniques de l'aile/fuselage sont non physiques (le coefficient
+    décroche au lieu de monter avec la traînée d'onde) → on remplace ces colonnes
+    par une extrapolation spline cubique (en Mach, à α fixé) du domaine fiable
+    M ≤ MACH_CUT. Le HT (`extrapolate=False`) se lit directement sur OpenVSP.
     """
     alphas = np.unique(df['AoA'].values)
     machs  = np.unique(df['Mach'].values)
@@ -100,6 +111,14 @@ def _build_grid(df, col):
     for j, mach in enumerate(machs):
         mask = df['Mach'] == mach
         grid[:, j] = df.loc[mask, col].values
+
+    keep = machs <= MACH_CUT + 1e-9
+    if extrapolate and keep.sum() >= 4 and (~keep).any():
+        for i in range(len(alphas)):
+            cs = CubicSpline(machs[keep], grid[i, keep], extrapolate=True)
+            for j, mach in enumerate(machs):
+                if mach > MACH_CUT + 1e-9:
+                    grid[i, j] = float(cs(mach))
 
     return {
         'x_alpha': alphas,
@@ -129,11 +148,13 @@ def build_aero_model(file_wb=DEFAULT_FILE_WB, file_ht=DEFAULT_FILE_HT):
     df_ht = load_history(file_ht)
 
     return {
-        'f_clwb': _build_grid(df_wb, 'CL'),
-        'f_cdwb': _build_grid(df_wb, 'CDtot_t'),   # traînée Trefftz (induit propre)
-        'f_cmwb': _build_grid(df_wb, 'CMy'),
+        # Wing-Body : extrapolation spline au-delà de M0.7 (transso non physique)
+        'f_clwb': _build_grid(df_wb, 'CL',    extrapolate=True),
+        'f_cdwb': _build_grid(df_wb, 'CDtot', extrapolate=True),  # near-field
+        'f_cmwb': _build_grid(df_wb, 'CMy',   extrapolate=True),
+        # Empennage horizontal : lecture directe des données OpenVSP (pas d'extrap)
         'f_clht': _build_grid(df_ht, 'CL'),
-        'f_cdht': _build_grid(df_ht, 'CDtot_t'),   # traînée Trefftz (induit propre)
+        'f_cdht': _build_grid(df_ht, 'CDtot'),   # traînée near-field (CDtot)
         'f_cmht': _build_grid(df_ht, 'CMy'),
     }
 

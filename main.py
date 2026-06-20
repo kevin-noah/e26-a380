@@ -713,6 +713,8 @@ def print_trim_menu():
     print("       --eps-fn    : tolérance convergence sur F_N     [N]   (défaut 10)")
     print("       --eps-dstab : tolérance convergence sur δstab   [deg] (défaut 1e-3)")
     print()
+    print("  Exemple :  trim --mass 300000 --mach 0.55 --h 6000")
+    print()
     print("  info   Constantes du modèle (φ_T, positions moteurs, F_N^max, W_F^max…)")
     print("  help   Afficher cette aide")
     print("  back   Retour au menu principal")
@@ -766,9 +768,13 @@ def _print_trim_result(r, args):
           f"({r['FN']/1000:.1f} kN)")
     print(f"  {'F_N par moteur':<22} = {r['FN_engine']:>10.0f}  N   "
           f"({r['FN_engine']/1000:.1f} kN)")
-    print(f"  {'Régime N1':<22} = {r['N1']:>10.2f}  %")
-    print(f"  {'Débit W_F (total)':<22} = {r['WF_total']:>10.4f}  kg/s "
-          f"({r['WF_total_kgh']:.0f} kg/h)")
+    if r.get('thrust_limited'):
+        print(f"  {'Régime N1':<22} = {'N/A':>10}     (LIMITÉ EN POUSSÉE :")
+        print(f"  {'Débit W_F (total)':<22} = {'N/A':>10}      poussée requise > F_N max dispo)")
+    else:
+        print(f"  {'Régime N1':<22} = {r['N1']:>10.2f}  %")
+        print(f"  {'Débit W_F (total)':<22} = {r['WF_total']:>10.4f}  kg/s "
+              f"({r['WF_total_kgh']:.0f} kg/h)")
     print("=" * 56)
     print()
     _print_trim_history(r['history'], r['converged'])
@@ -791,9 +797,15 @@ def _print_trim_history(history, converged=True):
           f"{'CL':>9}{'CD':>9}{'|Δα|':>9}{'|ΔF_N|':>9}{'|Δδ|':>9}")
     print("  " + "─" * 74)
     for i, h in enumerate(history):
-        ligne = (f"  {h['it']:>2}{h['alpha']:>8.3f}{h['dstab']:>10.3f}"
-                 f"{h['FN']/1000:>10.1f}{h['CL']:>9.4f}{h['CD']:>9.5f}"
-                 f"{h['d_alpha']:>9.1e}{h['d_FN']:>9.1e}{h['d_dstab']:>9.1e}")
+        if h['it'] == 0:
+            # Estimé initial : pas encore de CL/CD ni d'écarts
+            ligne = (f"  {h['it']:>2}{h['alpha']:>8.3f}{h['dstab']:>10.3f}"
+                     f"{h['FN']/1000:>10.1f}{'—':>9}{'—':>9}"
+                     f"{'—':>9}{'—':>9}{'—':>9}")
+        else:
+            ligne = (f"  {h['it']:>2}{h['alpha']:>8.3f}{h['dstab']:>10.3f}"
+                     f"{h['FN']/1000:>10.1f}{h['CL']:>9.4f}{h['CD']:>9.5f}"
+                     f"{h['d_alpha']:>9.1e}{h['d_FN']:>9.1e}{h['d_dstab']:>9.1e}")
         # Ligne d'équilibre (dernière itération convergée) en vert
         if converged and i == len(history) - 1:
             ligne = _GREEN + ligne + _RESET

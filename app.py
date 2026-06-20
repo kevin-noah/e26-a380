@@ -8,6 +8,7 @@ propulsion et émissions OACI.
 Lancement : streamlit run app.py
 """
 
+import os
 import base64
 from pathlib import Path
 from urllib.parse import quote
@@ -310,13 +311,24 @@ def ratios_strip(pairs, accent=None):
 # Chargement des modèles (mis en cache par Streamlit)
 # ---------------------------------------------------------------------------
 
+def _aero_sig():
+    """Signature des fichiers de données (mtime) — change si Kevin remplace les
+    .history VSPAERO, ce qui invalide automatiquement le cache du modèle aéro."""
+    return tuple(os.path.getmtime(f) for f in
+                 (mod_aero.DEFAULT_FILE_WB, mod_aero.DEFAULT_FILE_HT))
+
+
 @st.cache_resource
-def load_aero_model():
+def _build_aero_cached(sig):
     return mod_aero.build_aero_model()
 
 
+def load_aero_model():
+    return _build_aero_cached(_aero_sig())
+
+
 @st.cache_data
-def aero_curves(delta_it, mach, n_pts=120):
+def aero_curves(delta_it, mach, sig, n_pts=120):
     """Coefficients totaux et WB en fonction de α pour un Mach donné."""
     model = load_aero_model()
     grid = model['f_clwb']
@@ -332,7 +344,7 @@ def aero_curves(delta_it, mach, n_pts=120):
 
 
 @st.cache_data
-def aero_surface(coef, delta_it, n_alpha=45, n_mach=25):
+def aero_surface(coef, delta_it, sig, n_alpha=45, n_mach=25):
     """Grille (α, M) du coefficient total demandé pour la surface 3D."""
     model = load_aero_model()
     grid = model['f_clwb']
@@ -1052,7 +1064,7 @@ def page_aero():
     ]
     cl_t, cd_t, cm_t = rows[2][1], rows[2][2], rows[2][3]
 
-    curves = aero_curves(dit, mach)
+    curves = aero_curves(dit, mach, _aero_sig())
     alphas = curves['alpha']
     cl_arr = np.array(curves['cl_t']); cd_arr = np.array(curves['cd_t'])
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -1145,7 +1157,7 @@ def page_aero():
             coef = st.selectbox("Surface 3D",
                 ["CL_t", "CL_wb", "CL_ht", "CD_t", "CD_wb", "CD_ht",
                  "CM_t", "CM_wb", "CM_ht"], label_visibility="collapsed")
-            a_s, m_s, z = aero_surface(coef, dit)
+            a_s, m_s, z = aero_surface(coef, dit, _aero_sig())
             z_cur = {"CL_t": cl_t, "CD_t": cd_t, "CM_t": cm_t,
                      "CL_wb": rows[0][1], "CD_wb": rows[0][2], "CM_wb": rows[0][3],
                      "CL_ht": rows[1][1], "CD_ht": rows[1][2],
@@ -1463,10 +1475,10 @@ def page_trim():
         st.markdown('<div class="rp-head">Configuration & vol</div>'
                     '<div class="rp-sub">Masse, vol, centrage, pente</div>',
                     unsafe_allow_html=True)
-        mass = _rp_ctrl("Masse", 300.0, 575.0, 450.0, 1.0, "trim_mass",
+        mass = _rp_ctrl("Masse", 300.0, 575.0, 300.0, 1.0, "trim_mass",
                         "t") * 1000.0
-        mach = _rp_ctrl("Mach", 0.50, 0.89, 0.85, 0.01, "trim_mach", "", "{:.2f}")
-        h = _rp_ctrl("Altitude", 0.0, 13000.0, 11000.0, 100.0, "trim_h", "m")
+        mach = _rp_ctrl("Mach", 0.50, 0.89, 0.55, 0.01, "trim_mach", "", "{:.2f}")
+        h = _rp_ctrl("Altitude", 0.0, 13000.0, 6000.0, 100.0, "trim_h", "m")
         disa = _rp_ctrl("ΔISA", -20.0, 20.0, 0.0, 1.0, "trim_disa", "°C")
         xcg = _rp_ctrl("Centrage x_cg", 0.20, 0.45, 0.32, 0.005, "trim_xcg",
                        "MAC", "{:.2f}")
@@ -1497,8 +1509,8 @@ def page_trim():
             format_func=lambda v: f"{v:g}", label_visibility="collapsed")
 
         if st.button("Réinitialiser", width="stretch"):
-            for _k, _d in (("trim_mass", 450.0), ("trim_mach", 0.85),
-                           ("trim_h", 11000.0), ("trim_disa", 0.0),
+            for _k, _d in (("trim_mass", 300.0), ("trim_mach", 0.55),
+                           ("trim_h", 6000.0), ("trim_disa", 0.0),
                            ("trim_xcg", 0.32), ("trim_gamma", 0.0)):
                 st.session_state[f"{_k}_slider"] = _d
             st.session_state["trim_eps_alpha"] = 1e-3
@@ -1526,18 +1538,34 @@ def page_trim():
     if not r['converged']:
         st.warning(f"Algorithme non convergé en {r['iterations']} itérations "
                    "— résultats indicatifs.")
+    if r['thrust_limited']:
+        st.info(f"**Avion limité en poussée à ce point de vol.** L'équilibre "
+                f"aérodynamique est trouvé (α, δ<sub>stab</sub>, F_N = "
+                f"{r['FN']/1000:.0f} kN), mais la poussée requise "
+                f"({r['FN_engine']/1000:.0f} kN/moteur) dépasse la poussée max "
+                f"disponible → N1 et W_F non définis. **Descends** en altitude, "
+                f"**allège** ou **réduis le Mach** pour rester dans l'enveloppe.",
+                icon="⚠️")
 
     # ── Bande KPI : les 3 inconnues + N1, débit, finesse ───────────────────
+    if r['thrust_limited']:
+        kpi_n1 = _dash_kpi("Régime N1", "—", "",
+                           "limité en poussée", acc=acc_d)
+        kpi_wf = _dash_kpi("Débit W<sub>F</sub>", "—", "",
+                           "limité en poussée", acc=acc_d)
+    else:
+        kpi_n1 = _dash_kpi("Régime N1", f"{r['N1']:.1f}", "%",
+                           f"convergé en {r['iterations']} it.", acc=acc_d)
+        kpi_wf = _dash_kpi("Débit W<sub>F</sub>", fr(r['WF_total_kgh']), "kg/h",
+                           "total 4 moteurs", acc=acc_d)
     st.markdown(
         '<div class="dash-kpi-grid" style="grid-template-columns:repeat(5,1fr)">'
         + _dash_kpi("Incidence α", f"{r['alpha']:.2f}", "°",
                     "angle d'incidence géométrique", acc=acc_d)
         + _dash_kpi("Calage δ<sub>stab</sub>", f"{r['dstab']:.2f}", "°",
                     "plan horizontal réglable", acc=acc_d)
-        + _dash_kpi("Régime N1", f"{r['N1']:.1f}", "%",
-                    f"convergé en {r['iterations']} it.", acc=acc_d)
-        + _dash_kpi("Débit W<sub>F</sub>", fr(r['WF_total_kgh']), "kg/h",
-                    "total 4 moteurs", acc=acc_d)
+        + kpi_n1
+        + kpi_wf
         + _dash_kpi("Finesse L/D", f"{r['finesse']:.2f}", "",
                     "C<sub>L</sub> / C<sub>D</sub> au point équilibré", acc=acc_d)
         + '</div>', unsafe_allow_html=True)
@@ -1649,16 +1677,18 @@ def page_trim():
     # ── Détail des itérations (ligne d'équilibre surlignée) ────────────────
     with st.container(border=True):
         st.markdown("**Détail des itérations**")
+        def _f(v, n):   return "—" if v is None else round(v, n)
+        def _e(v):      return "—" if v is None else f"{v:.2e}"
         df_hist = pd.DataFrame([{
             "it":          hh['it'],
             "α [°]":       round(hh['alpha'], 3),
             "δstab [°]":   round(hh['dstab'], 3),
             "F_N [kN]":    round(hh['FN'] / 1000.0, 1),
-            "CL":          round(hh['CL'], 4),
-            "CD":          round(hh['CD'], 5),
-            "|Δα| [°]":    f"{hh['d_alpha']:.2e}",
-            "|ΔF_N| [N]":  f"{hh['d_FN']:.2e}",
-            "|Δδstab| [°]": f"{hh['d_dstab']:.2e}",
+            "CL":          _f(hh['CL'], 4),
+            "CD":          _f(hh['CD'], 5),
+            "|Δα| [°]":    _e(hh['d_alpha']),
+            "|ΔF_N| [N]":  _e(hh['d_FN']),
+            "|Δδstab| [°]": _e(hh['d_dstab']),
         } for hh in hist])
         _last = len(df_hist) - 1
 
