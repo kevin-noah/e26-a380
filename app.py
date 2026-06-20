@@ -1278,11 +1278,13 @@ def page_trim():
                           gamma=gamma, model=model)
     except ValueError as e:
         st.warning(f"**Pas d'équilibre trouvé à ce point de vol.**\n\n{e}\n\n"
-                   "L'avion est probablement *limité en poussée* : à cette "
-                   "altitude/ce Mach, la poussée disponible ne couvre pas la "
-                   "traînée. Essaie une **altitude plus basse**, un **Mach "
-                   "plus faible** ou une **masse réduite**. Rappel : le modèle "
-                   "aéro est calibré jusqu'à M ≈ 0.7 (finesse max ≈ 10).")
+                   "L'avion est *limité en poussée* : la poussée disponible ne "
+                   "couvre pas la traînée à ce point. En **haute altitude il "
+                   "faut voler plus vite** (la pression dynamique chute) — "
+                   "**augmente le Mach** (≈ 0.85 en croisière). Sinon, **descends "
+                   "en altitude** ou **réduis la masse**. Chaque masse a un "
+                   "plafond de croisière (step-climb) : ~FL369 à 500 t, "
+                   "~FL344 à 560 t, à M0.85.")
         return
 
     if not r['converged']:
