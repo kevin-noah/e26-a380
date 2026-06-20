@@ -130,10 +130,10 @@ def build_aero_model(file_wb=DEFAULT_FILE_WB, file_ht=DEFAULT_FILE_HT):
 
     return {
         'f_clwb': _build_grid(df_wb, 'CL'),
-        'f_cdwb': _build_grid(df_wb, 'CDtot'),
+        'f_cdwb': _build_grid(df_wb, 'CDtot_t'),   # traînée Trefftz (induit propre)
         'f_cmwb': _build_grid(df_wb, 'CMy'),
         'f_clht': _build_grid(df_ht, 'CL'),
-        'f_cdht': _build_grid(df_ht, 'CDtot'),
+        'f_cdht': _build_grid(df_ht, 'CDtot_t'),   # traînée Trefftz (induit propre)
         'f_cmht': _build_grid(df_ht, 'CMy'),
     }
 
