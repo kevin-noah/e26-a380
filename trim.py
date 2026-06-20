@@ -132,7 +132,7 @@ def m_aero(model, alpha, mach, dstab, q, weight, gamma=0.0):
     """
     Moment de tangage aérodynamique + poids autour du foyer CA.
 
-    M_aero = q̄·S_wb·c̄_wb·C_ms(α,δstab) − (x_cg + 0.25)·c̄_w·W·cos(γ)
+    M_aero = q̄·S_wb·c̄_wb·C_ms(α,δstab) − (-x_cg + 0.25)·c̄_w·W·cos(γ)
 
     Le terme de poids est inclus dans `weight` via l'appelant ; ici on ne traite
     que la part aérodynamique (le terme de centrage est ajouté dans
@@ -146,10 +146,10 @@ def moment_total(model, alpha, mach, dstab, fn_total, q, weight, x_cg, gamma=0.0
     """
     Moment de tangage total autour du foyer CA (nul à l'équilibre).
 
-    M_tot = q̄·S_wb·c̄_wb·C_ms − (x_cg + 0.25)·c̄_w·W·cos(γ) + M_moteur(F_N)
+    M_tot = q̄·S_wb·c̄_wb·C_ms − (0.25 − x_cg)·c̄_w·W·cos(γ) + M_moteur(F_N)
     """
     m_a = m_aero(model, alpha, mach, dstab, q, weight, gamma)
-    m_poids = (x_cg + 0.25) * C_W * weight * np.cos(np.radians(gamma))
+    m_poids = (0.25 - x_cg) * C_W * weight * np.cos(np.radians(gamma))
     m_m = m_moteur(fn_total, alpha)
     return m_a - m_poids + m_m
 
@@ -212,7 +212,7 @@ def trim(mass, mach, altitude, delta_isa=0.0, x_cg=0.40, gamma=0.0,
     altitude  : float  Altitude [m]
     delta_isa : float  Déviation de température ISA [°C]   (défaut : 0)
     x_cg      : float  Centrage — position du CG en fraction de MAC
-                       (bras du poids = (x_cg+0.25)·c̄_w)   (défaut : 0.40 = 40 %)
+                       (bras du poids = (0.25−x_cg)·c̄_w)   (défaut : 0.40 = 40 %)
     gamma     : float  Pente de la trajectoire [deg]       (défaut : 0 = palier)
     model     : dict   Modèle aéro (build_aero_model). Construit si None.
     verbose   : bool   Affiche l'historique des itérations.
