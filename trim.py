@@ -200,7 +200,8 @@ def n1_from_thrust(fn_engine, mach, altitude, delta_isa=0.0):
 # ---------------------------------------------------------------------------
 
 def trim(mass, mach, altitude, delta_isa=0.0, x_cg=0.40, gamma=0.0,
-         model=None, verbose=False):
+         model=None, verbose=False,
+         eps_alpha=EPS_ALPHA, eps_fn=EPS_FN, eps_dstab=EPS_DSTAB):
     """
     Équilibre l'avion en palier et retourne les paramètres de trim + le débit
     carburant.
@@ -216,6 +217,9 @@ def trim(mass, mach, altitude, delta_isa=0.0, x_cg=0.40, gamma=0.0,
     gamma     : float  Pente de la trajectoire [deg]       (défaut : 0 = palier)
     model     : dict   Modèle aéro (build_aero_model). Construit si None.
     verbose   : bool   Affiche l'historique des itérations.
+    eps_alpha : float  Tolérance de convergence sur α      [deg] (défaut EPS_ALPHA)
+    eps_fn    : float  Tolérance de convergence sur F_N     [N]   (défaut EPS_FN)
+    eps_dstab : float  Tolérance de convergence sur δstab   [deg] (défaut EPS_DSTAB)
 
     Retourne
     --------
@@ -280,7 +284,7 @@ def trim(mass, mach, altitude, delta_isa=0.0, x_cg=0.40, gamma=0.0,
 
         alpha, dstab, fn = alpha_star, dstab_star, fn_star
 
-        if d_alpha <= EPS_ALPHA and d_fn <= EPS_FN and d_dstab <= EPS_DSTAB:
+        if d_alpha <= eps_alpha and d_fn <= eps_fn and d_dstab <= eps_dstab:
             converged = True
             break
 
@@ -316,5 +320,8 @@ def trim(mass, mach, altitude, delta_isa=0.0, x_cg=0.40, gamma=0.0,
         'weight':     weight,
         'iterations': it,
         'converged':  converged,
+        'eps_alpha':  eps_alpha,
+        'eps_fn':     eps_fn,
+        'eps_dstab':  eps_dstab,
         'history':    history,
     }

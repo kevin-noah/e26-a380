@@ -1472,11 +1472,38 @@ def page_trim():
                        "MAC", "{:.2f}")
         gamma = _rp_ctrl("Pente γ", -5.0, 8.0, 0.0, 0.1, "trim_gamma", "°",
                          "{:.0f}")
+
+        # ── Critères de convergence (ε de Ghazi & Botez) ───────────────────
+        st.markdown('<div class="rp-head" style="margin-top:.6rem">'
+                    'Convergence</div>'
+                    '<div class="rp-sub">Tolérances ε de l\'algorithme</div>',
+                    unsafe_allow_html=True)
+        _EPS_DEG = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5]
+        _EPS_FN  = [500.0, 100.0, 50.0, 10.0, 1.0]
+        st.markdown('<div class="rp-row"><span class="rp-l">ε α</span>'
+                    '<span class="rp-r">deg</span></div>', unsafe_allow_html=True)
+        eps_alpha = st.select_slider(
+            "ε α", options=_EPS_DEG, value=1e-3, key="trim_eps_alpha",
+            format_func=lambda v: f"{v:g}", label_visibility="collapsed")
+        st.markdown('<div class="rp-row"><span class="rp-l">ε δstab</span>'
+                    '<span class="rp-r">deg</span></div>', unsafe_allow_html=True)
+        eps_dstab = st.select_slider(
+            "ε δstab", options=_EPS_DEG, value=1e-3, key="trim_eps_dstab",
+            format_func=lambda v: f"{v:g}", label_visibility="collapsed")
+        st.markdown('<div class="rp-row"><span class="rp-l">ε F_N</span>'
+                    '<span class="rp-r">N</span></div>', unsafe_allow_html=True)
+        eps_fn = st.select_slider(
+            "ε F_N", options=_EPS_FN, value=10.0, key="trim_eps_fn",
+            format_func=lambda v: f"{v:g}", label_visibility="collapsed")
+
         if st.button("Réinitialiser", width="stretch"):
             for _k, _d in (("trim_mass", 450.0), ("trim_mach", 0.85),
                            ("trim_h", 11000.0), ("trim_disa", 0.0),
                            ("trim_xcg", 0.32), ("trim_gamma", 0.0)):
                 st.session_state[f"{_k}_slider"] = _d
+            st.session_state["trim_eps_alpha"] = 1e-3
+            st.session_state["trim_eps_dstab"] = 1e-3
+            st.session_state["trim_eps_fn"] = 10.0
             st.rerun()
 
     page_head("Équilibrage longitudinal",
@@ -1486,7 +1513,9 @@ def page_trim():
     model = load_aero_model()
     try:
         r = mod_trim.trim(mass, mach, h, delta_isa=disa, x_cg=xcg,
-                          gamma=gamma, model=model)
+                          gamma=gamma, model=model,
+                          eps_alpha=eps_alpha, eps_fn=eps_fn,
+                          eps_dstab=eps_dstab)
     except ValueError as exc:
         st.warning(f"**Pas d'équilibre trouvé à ce point de vol.**\n\n{exc}\n\n"
                    "L'avion est *limité en poussée*. En haute altitude, "

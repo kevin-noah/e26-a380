@@ -705,9 +705,13 @@ def print_trim_menu():
     print("  remonte au régime N1 et au débit carburant W_F.")
     print()
     print("  trim --mass <kg> --mach <M> --h <alt> [--disa <v>] [--xcg <f>] [--gamma <d>]")
+    print("       [--eps-alpha <d>] [--eps-fn <n>] [--eps-dstab <d>]")
     print("       Équilibre l'avion pour la masse, le Mach et l'altitude donnés")
-    print("       --xcg   : centrage (fraction de MAC, défaut 0.40)")
-    print("       --gamma : pente de trajectoire [deg] (défaut 0 = palier)")
+    print("       --xcg       : centrage (fraction de MAC, défaut 0.40)")
+    print("       --gamma     : pente de trajectoire [deg] (défaut 0 = palier)")
+    print("       --eps-alpha : tolérance convergence sur α      [deg] (défaut 1e-3)")
+    print("       --eps-fn    : tolérance convergence sur F_N     [N]   (défaut 10)")
+    print("       --eps-dstab : tolérance convergence sur δstab   [deg] (défaut 1e-3)")
     print()
     print("  info   Constantes du modèle (φ_T, positions moteurs, F_N^max, W_F^max…)")
     print("  help   Afficher cette aide")
@@ -728,6 +732,9 @@ def _build_trim_parser():
     p.add_argument("--disa",  type=float, default=0.0,   metavar="ΔISA")
     p.add_argument("--xcg",   type=float, default=0.40,  metavar="FRAC")
     p.add_argument("--gamma", type=float, default=0.0,   metavar="DEG")
+    p.add_argument("--eps-alpha", type=float, default=mod_trim.EPS_ALPHA, metavar="DEG")
+    p.add_argument("--eps-fn",    type=float, default=mod_trim.EPS_FN,    metavar="N")
+    p.add_argument("--eps-dstab", type=float, default=mod_trim.EPS_DSTAB, metavar="DEG")
 
     sub.add_parser("info")
     return parser
@@ -742,6 +749,8 @@ def _print_trim_result(r, args):
           f"h = {args.h:.0f} m")
     print(f"  ΔISA = {args.disa:+.1f} °C   x_cg = {args.xcg:.2f} MAC   "
           f"γ = {args.gamma:+.1f} °")
+    print(f"  ε_α = {r['eps_alpha']:g} °   ε_FN = {r['eps_fn']:g} N   "
+          f"ε_δstab = {r['eps_dstab']:g} °")
     print(f"  {statut} en {r['iterations']} itérations")
     print("─" * 56)
     print(f"  {'α (incidence)':<22} = {r['alpha']:>10.3f}  °")
@@ -844,7 +853,9 @@ def loop_trim():
                 _model[0] = mod_aero.build_aero_model()
             r = mod_trim.trim(args.mass, args.mach, args.h,
                               delta_isa=args.disa, x_cg=args.xcg,
-                              gamma=args.gamma, model=_model[0])
+                              gamma=args.gamma, model=_model[0],
+                              eps_alpha=args.eps_alpha, eps_fn=args.eps_fn,
+                              eps_dstab=args.eps_dstab)
             _print_trim_result(r, args)
 
         except (ValueError, FileNotFoundError) as e:
