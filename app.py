@@ -172,7 +172,13 @@ st.markdown("""
     max-width: 1080px !important;
     margin-left: auto !important; margin-right: auto !important;
     padding-left: 3rem; padding-right: 3rem;
+    padding-top: 0rem !important;
+    transition: margin .28s cubic-bezier(.4, 0, .2, 1),
+                max-width .28s cubic-bezier(.4, 0, .2, 1) !important;
 }
+/* transition douce de la zone principale (réservation du ruban droit) */
+[data-testid="stMain"], section.main {
+    transition: padding .28s cubic-bezier(.4, 0, .2, 1); }
 .am-head { padding: 8px 3rem; margin-left: -3rem; margin-right: -3rem;
            background: transparent;
            -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
@@ -465,25 +471,32 @@ _FOOTER_HTML = """
 _CARDS_CSS = """
 <style>
 .mod-grid { display: grid; grid-template-columns: repeat(2, 1fr);
-            gap: 18px; margin-top: 10px; }
-.mod-card { display: block; position: relative; background: #fff;
-            border: 1px solid #E4E8EE; border-radius: 12px;
-            padding: 22px 26px; text-decoration: none !important;
-            transition: border-color .15s, box-shadow .15s, transform .15s; }
-a.mod-card:hover { border-color: var(--mc, #1B3A5C);
-                   transform: translateY(-2px);
-                   box-shadow: 0 6px 18px rgba(16, 24, 40, .08); }
-.mod-card .mod-head { display: flex; justify-content: space-between;
-                      align-items: center; }
-.mod-card .mod-num { font-family: ui-monospace, SFMono-Regular, monospace;
-                     font-size: 13px; font-weight: 700;
-                     color: var(--mc, #8B93A1); }
-.mod-card .mod-arrow { color: var(--mc, #5B6573); font-size: 19px;
-                       line-height: 1; }
-.mod-card h3 { margin: 10px 0 8px; font-size: 22px; font-weight: 700;
-               color: #1A2230; }
-.mod-card p { margin: 0; font-size: 14.5px; color: #5B6573;
-              line-height: 1.55; }
+            gap: 18px; margin-top: 16px; }
+.mod-card { display: block; position: relative; border-radius: 16px;
+            padding: 20px 22px; text-decoration: none !important;
+            background: rgba(255,255,255,.72);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            backdrop-filter: blur(24px) saturate(180%);
+            border: .5px solid rgba(255,255,255,.7);
+            box-shadow: 0 1px 2px rgba(16,24,40,.04), 0 10px 30px rgba(16,24,40,.06);
+            transition: transform .18s cubic-bezier(.4,0,.2,1),
+                        box-shadow .18s, border-color .18s; }
+a.mod-card:hover { transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--mc) 40%, white);
+    box-shadow: 0 6px 16px rgba(16,24,40,.05),
+                0 20px 44px -14px color-mix(in srgb, var(--mc) 50%, transparent); }
+.mod-card .mc-top { display: flex; align-items: center; gap: 12px; }
+.mod-card .mc-ico { width: 44px; height: 44px; border-radius: 13px; flex: 0 0 auto;
+    display: grid; place-items: center; color: var(--mc);
+    background: color-mix(in srgb, var(--mc) 12%, white);
+    border: 1px solid color-mix(in srgb, var(--mc) 24%, white); }
+.mod-card .mc-ico svg { width: 22px; height: 22px; }
+.mod-card .mc-num { font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 13px; font-weight: 700; color: var(--mc); margin-left: auto; }
+.mod-card .mc-arrow { color: var(--mc); font-size: 18px; line-height: 1; opacity: .75; }
+.mod-card h3 { margin: 15px 0 6px; font-size: 20px; font-weight: 700;
+               color: #1A2230; letter-spacing: -.01em; }
+.mod-card p { margin: 0; font-size: 14px; color: #5B6573; line-height: 1.5; }
 .mod-card.off { opacity: .55; }
 .mod-card .mod-pill { display: inline-block; margin-top: 14px;
                       font-size: 11px; font-weight: 700;
@@ -492,9 +505,8 @@ a.mod-card:hover { border-color: var(--mc, #1B3A5C);
                       border-radius: 99px; padding: 3px 10px; }
 @media (max-width: 900px) { .mod-grid { grid-template-columns: 1fr; } }
 @media (max-width: 640px) {
-  .mod-card { padding: 18px 20px; }
-  .mod-card h3 { font-size: 19px; }
-  .mod-card p { font-size: 13.5px; }
+  .mod-card { padding: 18px 18px; }
+  .mod-card h3 { font-size: 18px; }
 }
 </style>
 """
@@ -526,28 +538,19 @@ def page_accueil():
     ]
     cards = ""
     for num, nom, dispo, desc in modules:
-        head = (f'<div class="mod-head"><span class="mod-num">{num}</span>'
-                f'<span class="mod-arrow">→</span></div>')
-        body = f'{head}<h3>{nom}</h3><p>{desc}</p>'
+        paths, _ = _NAV_ICONS.get(nom, ("", ""))
         mc = ACCENTS.get(nom, (NAVY, NAVY))[1]
-        style = f"--mc:{mc}"
-        img = CARD_IMGS.get(nom)
-        if img is not None and img.exists():
-            b64i = _img_b64(str(img), img.stat().st_mtime)
-            # voile blanc dégradé : opaque côté texte, image visible à droite
-            style += (";background:"
-                      "linear-gradient(115deg, rgba(255,255,255,.97) 0%, "
-                      "rgba(255,255,255,.88) 52%, rgba(255,255,255,.45) "
-                      "100%), "
-                      f"url(data:image/jpeg;base64,{b64i}) center / cover "
-                      "no-repeat")
+        ico = ('<span class="mc-ico"><svg viewBox="0 0 24 24" fill="none" '
+               'stroke="currentColor" stroke-width="1.9" stroke-linecap="round" '
+               f'stroke-linejoin="round">{paths}</svg></span>')
+        head = (f'<div class="mc-top">{ico}<span class="mc-num">{num}</span>'
+                f'<span class="mc-arrow">→</span></div>')
+        body = f'{head}<h3>{nom}</h3><p>{desc}</p>'
         if dispo:
-            cards += (f'<a class="mod-card" style="{style}" '
-                      f'target="_self" '
+            cards += (f'<a class="mod-card" style="--mc:{mc}" target="_self" '
                       f'href="?page={quote(nom)}">{body}</a>')
         else:
-            cards += (f'<div class="mod-card off" style="{style}">'
-                      f'{body}'
+            cards += (f'<div class="mod-card off" style="--mc:{mc}">{body}'
                       f'<span class="mod-pill">À VENIR</span></div>')
     st.markdown(_CARDS_CSS + f'<div class="mod-grid">{cards}</div>',
                 unsafe_allow_html=True)
@@ -1723,6 +1726,8 @@ def apply_sidebar_background():
           radial-gradient(420px 300px at 24% 6%, rgba(120,165,225,.16), transparent 70%),
           radial-gradient(520px 420px at 80% 102%, rgba(255,159,10,.10), transparent 70%),
           linear-gradient(176deg, #122844 0%, #0C1C33 52%, #091322 100%) !important;
+        transition: width .28s cubic-bezier(.4, 0, .2, 1),
+                    min-width .28s cubic-bezier(.4, 0, .2, 1) !important;
     }
     [data-testid="stSidebarContent"], [data-testid="stSidebarUserContent"] {
         background: transparent !important; }

@@ -56,10 +56,10 @@ PHI_T = 2.0        # angle d'inclinaison de la poussée φ_T              [deg]
 C_W   = C_WB       # corde aéro moyenne de l'aile c̄_w (= c̄_wb ?)      [m]   ⚠
 
 # Positions des moteurs (données cours, en mètres)
-X_ENG_23 = 31.30   # position longitudinale paire intérieure (moteurs 2-3) [m]
-Z_ENG_23 =  4.75   # position verticale     paire intérieure (moteurs 2-3) [m]
-X_ENG_14 = 37.00   # position longitudinale paire extérieure (moteurs 1-4) [m]
-Z_ENG_14 =  5.45   # position verticale     paire extérieure (moteurs 1-4) [m]
+X_ENG_23 = 6.30   # position longitudinale paire intérieure (moteurs 2-3) [m]
+Z_ENG_23 = 1.6   # position verticale     paire intérieure (moteurs 2-3) [m]
+X_ENG_14 = 1.7   # position longitudinale paire extérieure (moteurs 1-4) [m]
+Z_ENG_14 = 0.5   # position verticale     paire extérieure (moteurs 1-4) [m]
 # ───────────────────────────────────────────────────────────────────────────
 
 # Régime moteur de référence (inversion de poussée et estimé initial F_N^max)
