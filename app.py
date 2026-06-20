@@ -66,6 +66,18 @@ def _contours(x_vals, y_vals, n=22):
                     start=lo, end=hi, size=size)
     return dict(x=axc(x_vals), y=axc(y_vals))
 
+
+def _rgba(hexc, a):
+    """Couleur rgba à partir d'un hex (#RRGGBB) et d'une opacité."""
+    h = hexc.lstrip("#")
+    return f"rgba({int(h[0:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)},{a})"
+
+
+def _mono_scale(acc_v):
+    """Échelle de couleurs monochrome (clair → accent) pour les surfaces 3D."""
+    return [[0.0, _rgba(acc_v, .12)], [0.45, _rgba(acc_v, .55)],
+            [1.0, acc_v]]
+
 # Piles de polices : Helvetica Neue en premier (préférence utilisateur),
 # SF Mono pour les chiffres
 FONT_UI = ('"Helvetica Neue", Helvetica, -apple-system, BlinkMacSystemFont, '
@@ -165,25 +177,33 @@ st.markdown("""
            background: transparent;
            -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
 .am-head .am-h1 { margin: 0; }
-/* ---- Volet gauche en tiroir : caché, glisse au survol, se referme à la sortie ---- */
-[data-testid="stSidebar"] {
-    position: fixed !important;
-    top: 0; left: 0; height: 100vh !important;
-    z-index: 1000 !important;
-    transform: translateX(-100%) !important;
-    transition: transform .28s cubic-bezier(.4, 0, .2, 1) !important;
-    box-shadow: 8px 0 40px rgba(9, 21, 38, .28);
-}
-/* révélé quand la souris survole la bande de gauche (#sb-hot) ou le volet */
-[data-testid="stApp"]:has(#sb-hot:hover) [data-testid="stSidebar"],
-[data-testid="stSidebar"]:hover {
-    transform: translateX(0) !important;
-}
-/* bande de détection invisible le long du bord gauche */
-#sb-hot { position: fixed; top: 0; left: 0; width: 16px; height: 100vh;
-    z-index: 1001; }
-/* contenu principal toujours pleine largeur (volet hors flux) */
-[data-testid="stMain"] { margin-left: 0 !important; }
+/* ---- Volet gauche : navigation en tuiles d'icônes (toujours ouvert) ---- */
+[data-testid="stSidebar"] [role="radiogroup"] { gap: 5px !important; }
+[data-testid="stSidebar"] [role="radiogroup"] > label {
+    display: flex !important; align-items: center; gap: 0;
+    padding: 0 !important; margin: 0 !important; min-height: 50px; cursor: pointer; }
+/* cacher le rond radio natif */
+[data-testid="stSidebar"] [role="radiogroup"] > label > div:first-child {
+    display: none !important; }
+/* tuile carrée d'icône (SVG coloré par module injecté en ::before) */
+[data-testid="stSidebar"] [role="radiogroup"] > label::before {
+    content: ""; order: -1; flex: 0 0 auto;
+    width: 42px; height: 42px; border-radius: 12px; margin-right: 13px;
+    background-repeat: no-repeat; background-position: center;
+    background-size: 21px 21px;
+    background-color: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08);
+    transition: background-color .16s, box-shadow .16s; }
+[data-testid="stSidebar"] [role="radiogroup"] p {
+    margin: 0; font-size: 14.5px; font-weight: 500; color: #B7C6DC;
+    white-space: nowrap; transition: color .16s; }
+[data-testid="stSidebar"] [role="radiogroup"] > label:hover p { color: #E6EEFB; }
+[data-testid="stSidebar"] [role="radiogroup"] > label:hover::before {
+    background-color: rgba(255,255,255,.10); }
+[data-testid="stSidebar"] [role="radiogroup"] > label:has(input:checked) p {
+    color: #fff; font-weight: 600; }
+[data-testid="stSidebar"] [role="radiogroup"] > label:has(input:checked)::before {
+    background-color: rgba(255,255,255,.13);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.22), 0 5px 16px -6px rgba(0,0,0,.6); }
 /* ---- Sliders façon maquette : pouce blanc à ombre, piste fine arrondie ---- */
 [data-testid="stSlider"] div[role="slider"] {
     background-color: #FFFFFF !important;
@@ -591,7 +611,7 @@ def carte_saisie(champs):
 _DASH_CSS = """
 <style>
 .dash-ind-grid { display:grid; grid-template-columns: repeat(4, 1fr) 1.35fr;
-    gap:14px; margin: 4px 0 2px; }
+    gap:14px; margin: 4px 0 20px; }
 .dash-ind { background: rgba(255,255,255,.72);
     -webkit-backdrop-filter: blur(24px) saturate(180%);
     backdrop-filter: blur(24px) saturate(180%);
@@ -616,13 +636,15 @@ _DASH_CSS = """
     font-weight:500; color:#1C1C1E; font-variant-numeric:tabular-nums; }
 .dash-ratio .rl { font-size:9.5px; color:#8E8E93; text-transform:uppercase;
     letter-spacing:.05em; }
-.dash-chart-head { display:flex; align-items:baseline; justify-content:space-between;
-    margin:2px 2px 0; }
-.dash-chart-head .nm { font-size:14px; font-weight:600; color:#3A3A3C; }
+.dash-chart-head { display:flex; align-items:flex-start;
+    justify-content:space-between; margin:0 2px 6px; gap:12px; }
+.dash-chart-head .nm { font-size:16px; font-weight:600; color:#1A2230;
+    letter-spacing:-.01em; }
+.dash-chart-sub { display:block; font-size:11.5px; color:#8B93A1; margin-top:1px; }
 .dash-chart-head .cur { font-family: ui-monospace,"SF Mono",monospace; font-size:13px;
     font-weight:500; color:var(--acc,#0066CC); font-variant-numeric:tabular-nums; }
 /* Cartes KPI (maquettes Conversion / Aéro / Prop / Trim) */
-.dash-kpi-grid { display:grid; gap:14px; margin:4px 0 2px; }
+.dash-kpi-grid { display:grid; gap:14px; margin:4px 0 20px; }
 .dash-kpi { background: rgba(255,255,255,.72);
     -webkit-backdrop-filter: blur(24px) saturate(180%);
     backdrop-filter: blur(24px) saturate(180%);
@@ -694,21 +716,22 @@ def _dash_ind(lbl, num, unit, sym_txt=""):
 
 def page_atm():
     acc_d, acc_v = ACCENTS["Atmosphère"]
+    st.markdown(_DASH_CSS + _RP_CSS, unsafe_allow_html=True)
+
+    with st.container(border=True, key="rp_panel"):
+        st.markdown('<div class="rp-head">Paramètres</div>'
+                    '<div class="rp-sub">Saisie directe ou ajustement au slider'
+                    '</div>', unsafe_allow_html=True)
+        h = _rp_ctrl("Altitude", 0.0, 20000.0, 11700.0, 50.0, "atm_h", "m")
+        disa = _rp_ctrl("ΔISA", -30.0, 30.0, 0.0, 1.0, "atm_disa", "°C")
+        if st.button("Réinitialiser", width="stretch"):
+            for _k, _d in (("atm_h", 11700.0), ("atm_disa", 0.0)):
+                st.session_state[f"{_k}_slider"] = _d
+            st.rerun()
+
     page_head("Atmosphère standard internationale",
               "Conditions ambiantes le long du profil de vol de l'A380 — "
-              "modèle ISA.", accent=acc_v)
-    st.markdown(_DASH_CSS, unsafe_allow_html=True)
-
-    # ── Barre de contrôles, toujours visible ───────────────────────────────
-    with st.container(border=True):
-        cc1, cc2 = st.columns(2)
-        h = cc1.slider("Altitude [m]", 0.0, 20000.0, 11700.0, 50.0, key="atm_h")
-        cc1.caption(f"≈ {fr(h / FT)} ft")
-        disa = cc2.slider("Écart à l'ISA — ΔISA [°C]", -30.0, 30.0, 0.0, 1.0,
-                          key="atm_disa")
-        cc2.caption("plus froid que standard" if disa < 0 else
-                    "plus chaud que standard" if disa > 0 else
-                    "atmosphère standard")
+              "modèle ISA · paramètres dans le panneau de droite →", accent=acc_v)
 
     props = mod_atm.atmosphere(h, disa)
 
@@ -758,21 +781,31 @@ def page_atm():
                     f'</div>', unsafe_allow_html=True)
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(
-                    x=vals, y=hs, mode="lines", line=dict(color=acc_v, width=2.4),
+                    x=vals, y=hs, mode="lines", line=dict(color=acc_v, width=2.6),
                     showlegend=False,
                     hovertemplate=f"{nom} : %{{x:.4g}} {unit}<br>"
                                   "h : %{y:,.0f} m<extra></extra>"))
-                fig.add_trace(go.Scatter(
-                    x=[cur], y=[h], mode="markers", marker=dict(color=RED, size=9),
-                    showlegend=False, hoverinfo="skip"))
                 fig.add_hline(y=mod_atm.H_TROPO, line_dash="dot", line_width=1.2,
-                              line_color="rgba(60,60,67,.34)")
-                fig.update_yaxes(title_text="h [m]", range=[0, 20000])
+                              line_color="rgba(60,60,67,.30)")
+                fig.add_shape(type="line", x0=float(np.min(vals)), x1=cur,
+                              y0=h, y1=h,
+                              line=dict(color=_rgba(acc_d, .4), width=1, dash="dot"))
+                fig.add_trace(go.Scatter(
+                    x=[cur], y=[h], mode="markers",
+                    marker=dict(color="white", size=11,
+                                line=dict(color=acc_d, width=3)),
+                    showlegend=False, hoverinfo="skip"))
+                fig.update_xaxes(showgrid=True, gridcolor="rgba(60,60,67,.07)",
+                                 zeroline=False, color="#8B93A1")
+                fig.update_yaxes(title_text="h [m]", range=[0, 20000],
+                                 showgrid=False, zeroline=False, color="#8B93A1")
                 fig.update_layout(height=240, template="plotly_white",
                                   font=dict(family=FONT_UI), showlegend=False,
-                                  margin=dict(t=8, b=32, l=10, r=12))
+                                  margin=dict(t=8, b=32, l=10, r=12),
+                                  plot_bgcolor="rgba(0,0,0,0)",
+                                  paper_bgcolor="rgba(0,0,0,0)")
                 st.plotly_chart(fig, config=PLOTLY_CONF)
-    st.caption("Ligne pointillée : tropopause (11 000 m) · point rouge : "
+    st.caption("Ligne pointillée : tropopause (11 000 m) · point cerclé : "
                f"altitude courante {fr(h)} m")
 
     # ── Détails repliables ─────────────────────────────────────────────────
@@ -811,26 +844,33 @@ def _solve_speeds(typ, val, h, disa):
 
 def page_conv():
     acc_d, acc_v = ACCENTS["Conversion"]
-    page_head("Conversion de vitesses",
-              "TAS / CAS / Mach en atmosphère ISA — conversions isentropiques.",
-              accent=acc_v)
-    st.markdown(_DASH_CSS, unsafe_allow_html=True)
+    st.markdown(_DASH_CSS + _RP_CSS, unsafe_allow_html=True)
 
-    # ── Contrôles toujours visibles ────────────────────────────────────────
-    with st.container(border=True):
-        c0, c1, c2, c3 = st.columns([1.2, 1.5, 1, 1])
-        typ = c0.segmented_control("Type d'entrée", ["TAS", "CAS", "Mach"],
+    with st.container(border=True, key="rp_panel"):
+        st.markdown('<div class="rp-head">Paramètres</div>'
+                    '<div class="rp-sub">Type d\'entrée, vitesse et conditions'
+                    '</div>', unsafe_allow_html=True)
+        typ = st.segmented_control("Type d'entrée", ["TAS", "CAS", "Mach"],
                                    default="CAS", key="conv_type") or "CAS"
         if typ == "Mach":
-            val = c1.slider("Entrée — Mach", 0.20, 0.92, 0.80, 0.01,
-                            key="conv_mach")
+            val = _rp_ctrl("Entrée — Mach", 0.20, 0.92, 0.80, 0.01, "conv_mach",
+                           "", "{:.2f}")
             val_si = val
         else:
-            val = c1.slider(f"Entrée — {typ} [kt]", 100.0, 400.0, 280.0, 1.0,
-                            key="conv_spd")
+            val = _rp_ctrl(f"Entrée — {typ}", 100.0, 400.0, 280.0, 1.0,
+                           "conv_spd", "kt")
             val_si = val * KT
-        h = c2.slider("Altitude [m]", 0.0, 13100.0, 11000.0, 50.0, key="conv_h")
-        disa = c3.slider("ΔISA [°C]", -30.0, 30.0, 0.0, 1.0, key="conv_disa")
+        h = _rp_ctrl("Altitude", 0.0, 13100.0, 11000.0, 50.0, "conv_h", "m")
+        disa = _rp_ctrl("ΔISA", -30.0, 30.0, 0.0, 1.0, "conv_disa", "°C")
+        if st.button("Réinitialiser", width="stretch"):
+            for _k, _d in (("conv_mach", 0.80), ("conv_spd", 280.0),
+                           ("conv_h", 11000.0), ("conv_disa", 0.0)):
+                st.session_state[f"{_k}_slider"] = _d
+            st.rerun()
+
+    page_head("Conversion de vitesses",
+              "TAS / CAS / Mach en atmosphère ISA · paramètres dans le panneau "
+              "de droite →", accent=acc_v)
 
     tas, cas, M = _solve_speeds(typ, val_si, h, disa)
     atm = mod_atm.atmosphere(h, disa)
@@ -868,17 +908,27 @@ def page_conv():
                     f'</div>', unsafe_allow_html=True)
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(
-                    x=xs, y=hs, mode="lines", line=dict(color=acc_v, width=2.4),
+                    x=xs, y=hs, mode="lines", line=dict(color=acc_v, width=2.6),
                     showlegend=False,
                     hovertemplate=f"{xlab} : %{{x:.4g}}<br>"
                                   "h : %{y:,.0f} m<extra></extra>"))
+                fig.add_shape(type="line", x0=float(np.min(xs)), x1=cur_x,
+                              y0=h, y1=h,
+                              line=dict(color=_rgba(acc_d, .4), width=1, dash="dot"))
                 fig.add_trace(go.Scatter(
-                    x=[cur_x], y=[h], mode="markers", marker=dict(color=RED, size=9),
+                    x=[cur_x], y=[h], mode="markers",
+                    marker=dict(color="white", size=11,
+                                line=dict(color=acc_d, width=3)),
                     showlegend=False, hoverinfo="skip"))
-                fig.update_yaxes(range=[0, 13100], title_text="h [m]")
+                fig.update_xaxes(showgrid=True, gridcolor="rgba(60,60,67,.07)",
+                                 zeroline=False, color="#8B93A1")
+                fig.update_yaxes(range=[0, 13100], title_text="h [m]",
+                                 showgrid=False, zeroline=False, color="#8B93A1")
                 fig.update_layout(height=230, template="plotly_white",
                                   font=dict(family=FONT_UI), showlegend=False,
-                                  margin=dict(t=8, b=30, l=10, r=12))
+                                  margin=dict(t=8, b=30, l=10, r=12),
+                                  plot_bgcolor="rgba(0,0,0,0)",
+                                  paper_bgcolor="rgba(0,0,0,0)")
                 st.plotly_chart(fig, config=PLOTLY_CONF)
 
     g1 = st.columns(2, gap="medium")
@@ -912,10 +962,16 @@ def page_conv():
                 line=dict(color=acc_d, width=2.2, dash="dot"),
                 hovertemplate="entrée %{x:.3g}<br>CAS %{y:.1f} kt<extra></extra>"))
             fig.add_trace(go.Scatter(x=[val], y=[tas / KT], mode="markers",
-                marker=dict(color=RED, size=9), showlegend=False, hoverinfo="skip"))
+                marker=dict(color="white", size=11,
+                            line=dict(color=acc_d, width=3)),
+                showlegend=False, hoverinfo="skip"))
+            fig.update_xaxes(showgrid=False, zeroline=False, color="#8B93A1")
+            fig.update_yaxes(showgrid=True, gridcolor="rgba(60,60,67,.07)",
+                             zeroline=False, color="#8B93A1")
             fig.update_layout(height=230, template="plotly_white",
                 font=dict(family=FONT_UI), margin=dict(t=8, b=34, l=10, r=12),
                 xaxis_title=xlab, yaxis_title="kt",
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
                 legend=dict(font=dict(size=9), orientation="h", y=1.04, x=0))
             st.plotly_chart(fig, config=PLOTLY_CONF)
 
@@ -948,25 +1004,33 @@ def page_conv():
 
 def page_aero():
     acc_d, acc_v = ACCENTS["Aérodynamique"]
-    page_head("Aérodynamique",
-              "Coefficients VSPAERO — portance, traînée et moment de tangage "
-              "(aile-fuselage, empennage, avion complet).", accent=acc_v)
-    st.markdown(_DASH_CSS, unsafe_allow_html=True)
+    st.markdown(_DASH_CSS + _RP_CSS, unsafe_allow_html=True)
 
     model = load_aero_model()
     grid = model['f_clwb']
     a_min, a_max = float(grid['x_alpha'][0]), float(grid['x_alpha'][-1])
     m_min, m_max = float(grid['y_mach'][0]), float(grid['y_mach'][-1])
 
-    # ── Contrôles toujours visibles ────────────────────────────────────────
-    with st.container(border=True):
-        c1, c2, c3 = st.columns(3)
-        alpha = c1.slider("Incidence α [°]", a_min, a_max, 2.0, 0.1,
-                          key="aero_alpha")
-        mach = c2.slider("Mach", m_min, m_max, float(min(0.84, m_max)), 0.01,
-                         key="aero_mach")
-        dit = c3.slider("Calage stab. δit [°]", -10.0, 10.0, 0.0, 0.5,
-                        key="aero_dit")
+    with st.container(border=True, key="rp_panel"):
+        st.markdown('<div class="rp-head">Paramètres</div>'
+                    '<div class="rp-sub">Incidence, Mach et calage stabilisateur'
+                    '</div>', unsafe_allow_html=True)
+        alpha = _rp_ctrl("Incidence α", a_min, a_max, 2.0, 0.1, "aero_alpha",
+                         "°", "{:.0f}")
+        mach = _rp_ctrl("Mach", m_min, m_max, float(min(0.84, m_max)), 0.01,
+                        "aero_mach", "", "{:.2f}")
+        dit = _rp_ctrl("Calage δit", -10.0, 10.0, 0.0, 0.5, "aero_dit", "°",
+                       "{:.0f}")
+        if st.button("Réinitialiser", width="stretch"):
+            for _k, _d in (("aero_alpha", 2.0),
+                           ("aero_mach", float(min(0.84, m_max))),
+                           ("aero_dit", 0.0)):
+                st.session_state[f"{_k}_slider"] = _d
+            st.rerun()
+
+    page_head("Aérodynamique",
+              "Coefficients VSPAERO · paramètres dans le panneau de droite →",
+              accent=acc_v)
 
     eps = float(mod_aero.f_downwash(alpha))
     rows = [
@@ -1029,11 +1093,16 @@ def page_aero():
                               "<extra></extra>"), row=1, col=i)
             cur = {"cl": cl_t, "cd": cd_t, "cm": cm_t}[key]
             fig.add_trace(go.Scatter(x=[alpha], y=[cur], mode="markers",
-                marker=dict(color=RED, size=9), showlegend=False,
-                hoverinfo="skip"), row=1, col=i)
-        fig.update_xaxes(title_text="α [°]")
+                marker=dict(color="white", size=10,
+                            line=dict(color=acc_d, width=3)),
+                showlegend=False, hoverinfo="skip"), row=1, col=i)
+        fig.update_xaxes(title_text="α [°]", showgrid=False, zeroline=False,
+                         color="#8B93A1")
+        fig.update_yaxes(showgrid=True, gridcolor="rgba(60,60,67,.07)",
+                         zeroline=False, color="#8B93A1")
         fig.update_layout(height=300, template="plotly_white",
             font=dict(family=FONT_UI), margin=dict(t=30, b=36, l=10, r=10),
+            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
             legend=dict(font=dict(size=9), orientation="h", y=1.22, x=0))
         st.plotly_chart(fig, config=PLOTLY_CONF)
 
@@ -1056,11 +1125,17 @@ def page_aero():
                 marker=dict(color=acc_v, size=13, symbol="star"),
                 showlegend=False, hoverinfo="skip"))
             fig.add_trace(go.Scatter(x=[cd_t], y=[cl_t], mode="markers",
-                marker=dict(color=RED, size=9), showlegend=False,
-                hoverinfo="skip"))
+                marker=dict(color="white", size=11,
+                            line=dict(color=acc_d, width=3)),
+                showlegend=False, hoverinfo="skip"))
+            fig.update_xaxes(showgrid=True, gridcolor="rgba(60,60,67,.07)",
+                             zeroline=False, color="#8B93A1")
+            fig.update_yaxes(showgrid=True, gridcolor="rgba(60,60,67,.07)",
+                             zeroline=False, color="#8B93A1")
             fig.update_layout(height=300, template="plotly_white",
                 font=dict(family=FONT_UI), margin=dict(t=8, b=34, l=10, r=12),
-                xaxis_title="CD", yaxis_title="CL")
+                xaxis_title="CD", yaxis_title="CL",
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig, config=PLOTLY_CONF)
     with p2:
         with st.container(border=True):
@@ -1073,12 +1148,13 @@ def page_aero():
                      "CL_ht": rows[1][1], "CD_ht": rows[1][2],
                      "CM_ht": rows[1][3]}[coef]
             fig = go.Figure(go.Surface(x=m_s, y=a_s, z=z,
-                colorscale=SCALE_MODULES, showscale=False,
+                colorscale=_mono_scale(acc_v), showscale=False,
                 contours=_contours(m_s, a_s),
                 hovertemplate="Mach %{x:.2f}<br>α %{y:.2f}°<br>"
                               f"{coef} %{{z:.4f}}<extra></extra>"))
             fig.add_trace(go.Scatter3d(x=[mach], y=[alpha], z=[z_cur],
-                mode="markers", marker=dict(color=RED, size=4),
+                mode="markers", marker=dict(color="white", size=5,
+                line=dict(color=acc_d, width=2)),
                 showlegend=False, name="point"))
             fig.update_layout(height=300, template="plotly_white",
                 font=dict(family=FONT_UI), margin=dict(t=8, b=8, l=8, r=8),
@@ -1122,25 +1198,82 @@ def page_aero():
                  r"\bar z_{ht} = z_{ht}\cos\alpha - x_{ht}\sin\alpha")
 
 
+# Panneau de droite (paramètres de vol) — fixé à droite via :has(.rp-anchor),
+# sans réindenter le corps des pages. Le contenu principal laisse la place.
+_RP_CSS = """
+<style>
+.st-key-rp_panel {
+    position: fixed !important; top: 0; right: 0; height: 100vh !important;
+    width: 330px !important; z-index: 70 !important;
+    border: none !important; border-left: 1px solid rgba(60,60,67,.12) !important;
+    border-radius: 0 !important;
+    background: rgba(255,255,255,.85) !important;
+    -webkit-backdrop-filter: blur(26px) saturate(180%);
+    backdrop-filter: blur(26px) saturate(180%);
+    padding: 1.5rem 1.4rem !important; overflow-y: auto !important;
+    box-shadow: -12px 0 44px -24px rgba(16,24,40,.3) !important; }
+/* réserve la place du ruban droit au niveau de la zone principale (fiable) ;
+   le contenu remplit la largeur restante */
+[data-testid="stMain"], section.main { padding-right: 350px !important; }
+[data-testid="stMainBlockContainer"] { max-width: none !important; }
+/* cartes : autorisées à rétrécir dans la largeur restante (évite le débordement) */
+.dash-kpi, .dash-ind, .dash-dcell, .dash-ratio { min-width: 0 !important; }
+.dash-kpi .num, .dash-ind .num { overflow: hidden; text-overflow: ellipsis; }
+/* graphes Plotly : suivre la largeur du conteneur */
+[data-testid="stPlotlyChart"] { width: 100% !important; }
+[data-testid="stPlotlyChart"] > div, [data-testid="stPlotlyChart"] .js-plotly-plot {
+    width: 100% !important; }
+.rp-head { font-size: 16.5px; font-weight: 600; color: #1A2230; letter-spacing: -.01em; }
+.rp-sub { font-size: 12.5px; color: #8B93A1; margin: 2px 0 6px; }
+.rp-row { display: flex; justify-content: space-between; align-items: baseline;
+    margin: 14px 0 2px; }
+.rp-row .rp-l { font-size: 13px; font-weight: 600; color: #1A2230; }
+.rp-row .rp-r { font-size: 10.5px; color: #8B93A1;
+    font-family: ui-monospace, "SF Mono", monospace; }
+</style>
+"""
+
+
+def _rp_ctrl(label, lo, hi, default, step, key, unit="", fmt="{:.0f}"):
+    """Ligne du panneau droit : libellé + plage, champ ± et slider synchronisés.
+    Le slider est la référence ; le champ est redérivé à chaque rendu."""
+    _init_slider(key, default)
+    rng = (fmt.format(lo) + " — " + fmt.format(hi)
+           + (" " + unit if unit else "")).strip()
+    st.markdown(f'<div class="rp-row"><span class="rp-l">{label}</span>'
+                f'<span class="rp-r">{rng}</span></div>', unsafe_allow_html=True)
+    st.session_state[f"{key}_input"] = float(st.session_state[f"{key}_slider"])
+    st.number_input(label, float(lo), float(hi), step=float(step),
+                    key=f"{key}_input", on_change=_appliquer_saisie,
+                    args=(key, 1.0, float(lo), float(hi)),
+                    label_visibility="collapsed")
+    st.slider(label, float(lo), float(hi), step=float(step),
+              key=f"{key}_slider", label_visibility="collapsed")
+    return float(st.session_state[f"{key}_slider"])
+
+
 def page_prop():
     acc_d, acc_v = ACCENTS["Propulsion & Émissions"]
-    page_head("Propulsion & émissions — Trent 970",
-              "Tout le moteur en un coup d'œil : poussée, débit carburant "
-              "et émissions OACI.",
-              accent=acc_v)
-    st.markdown(_DASH_CSS, unsafe_allow_html=True)
+    st.markdown(_DASH_CSS + _RP_CSS, unsafe_allow_html=True)
 
-    # ── Barre de contrôles, toujours visible (tableau de bord) ─────────────
-    with st.container(border=True):
-        st.markdown('<div class="am-card-title">Conditions de vol</div>',
-                    unsafe_allow_html=True)
-        c1, c2, c3, c4 = st.columns(4)
-        n1   = c1.slider("Fan speed N1 [%]", 60.0, 100.0, 90.0, 0.5,
-                         key="prop_n1")
-        mach = c2.slider("Mach", 0.0, 0.85, 0.85, 0.01, key="prop_mach")
-        h    = c3.slider("Altitude [m]", 0.0, 15000.0, 10668.0, 50.0,
-                         key="prop_h")
-        disa = c4.slider("ΔISA [°C]", -30.0, 30.0, 0.0, 1.0, key="prop_disa")
+    # ── Ruban de droite : paramètres de vol (fixé à droite via .st-key-rp_panel)
+    with st.container(border=True, key="rp_panel"):
+        st.markdown('<div class="rp-head">Paramètres de vol</div>'
+                    '<div class="rp-sub">Saisie directe ou ajustement au slider'
+                    '</div>', unsafe_allow_html=True)
+        n1 = _rp_ctrl("N1", 18.0, 100.0, 90.0, 0.5, "prop_n1", "%", "{:.1f}")
+        mach = _rp_ctrl("Mach", 0.0, 0.89, 0.85, 0.01, "prop_mach", "", "{:.2f}")
+        h = _rp_ctrl("Altitude", 0.0, 13000.0, 10670.0, 50.0, "prop_h", "m")
+        disa = _rp_ctrl("ΔISA", -25.0, 35.0, 0.0, 1.0, "prop_disa", "°C")
+        if st.button("Réinitialiser", use_container_width=True):
+            for _k, _d in (("prop_n1", 90.0), ("prop_mach", 0.85),
+                           ("prop_h", 10670.0), ("prop_disa", 0.0)):
+                st.session_state[f"{_k}_slider"] = _d
+            st.rerun()
+
+    page_head("Propulsion & émissions — Trent 970",
+              "Rolls-Royce Trent 970 · saisie des paramètres dans le panneau "
+              "de droite →", accent=acc_v)
 
     fn = float(mod_prop.get_thrust(n1, mach, h, disa))
     ei = mod_prop.get_emission_indices(n1, mach, h, disa)
@@ -1163,92 +1296,126 @@ def page_prop():
                     "dioxyde de carbone", acc=acc_d)
         + '</div>', unsafe_allow_html=True)
 
-    # ── Grille de graphes : tout visible d'un coup ─────────────────────────
+    # ── Graphes : famille de Mach monochrome + courbe courante (style maquette)
     n1s = np.linspace(60.0, 100.0, 81)
-    machs = np.linspace(0.0, 0.85, 6)
+    machs = np.linspace(0.0, 0.89, 6)
+    SUB = "par moteur · famille de Mach 0 → 0,89"
 
-    def _dash(fig, titre, h_px=300, legend=False):
-        fig.update_layout(height=h_px, template="plotly_white",
-                          font=dict(family=FONT_UI), colorway=APPLE_SEQ,
-                          margin=dict(t=42, b=40, l=12, r=12), title=titre,
-                          showlegend=legend, legend=dict(font=dict(size=9)))
+    def _mono2d(col, title, sub, gety, ycur, cur_txt):
+        with col:
+            with st.container(border=True):
+                st.markdown(f'<div class="dash-chart-head"><div>'
+                            f'<span class="nm">{title}</span>'
+                            f'<span class="dash-chart-sub">{sub}</span></div>'
+                            f'<span class="cur" style="--acc:{acc_d}">{cur_txt}</span>'
+                            f'</div>', unsafe_allow_html=True)
+                fig = go.Figure()
+                for i, M in enumerate(machs):           # famille (accent dégradé)
+                    op = 0.13 + 0.30 * (i / (len(machs) - 1))
+                    fig.add_trace(go.Scatter(x=n1s, y=gety(n1s, M), mode="lines",
+                        line=dict(color=_rgba(acc_v, op), width=1.3),
+                        showlegend=False, hoverinfo="skip"))
+                fig.add_trace(go.Scatter(x=n1s, y=gety(n1s, mach), mode="lines",
+                    line=dict(color=acc_d, width=3), fill="tozeroy",
+                    fillcolor=_rgba(acc_v, .08), showlegend=False,
+                    hovertemplate="N1 %{x:.0f} %<br>%{y:.4g}<extra></extra>"))
+                fig.add_shape(type="line", x0=n1, x1=n1, y0=0, y1=ycur,
+                    line=dict(color=_rgba(acc_d, .45), width=1, dash="dot"))
+                fig.add_trace(go.Scatter(x=[n1], y=[ycur], mode="markers",
+                    marker=dict(color="white", size=12,
+                                line=dict(color=acc_d, width=3)),
+                    showlegend=False, hoverinfo="skip"))
+                fig.add_annotation(x=n1, y=ycur, text=cur_txt, showarrow=False,
+                    bgcolor=acc_d, borderpad=4, xanchor="left", xshift=11, yshift=1,
+                    font=dict(color="white", size=11.5, family=FONT_MONO))
+                fig.update_xaxes(title_text="N1 [%]", showgrid=False,
+                    zeroline=False, color="#8B93A1")
+                fig.update_yaxes(showgrid=True, gridcolor="rgba(60,60,67,.07)",
+                    zeroline=False, color="#8B93A1", rangemode="tozero")
+                fig.update_layout(height=300, template="plotly_white",
+                    font=dict(family=FONT_UI), margin=dict(t=8, b=34, l=8, r=8),
+                    plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+                st.plotly_chart(fig, config=PLOTLY_CONF)
 
-    gL, gR = st.columns(2)
-    with gL:
-        fig = go.Figure()
-        for M in machs:
-            fig.add_trace(go.Scatter(
-                x=n1s, y=mod_prop.get_thrust(n1s, M, h, disa), name=f"M={M:.2f}",
-                hovertemplate="N1 : %{x:.1f} %<br>FN : %{y:.3f}"
-                              "<extra>M=" + f"{M:.2f}</extra>"))
-        fig.add_trace(go.Scatter(
-            x=[n1], y=[fn], mode="markers+text", marker=dict(color=RED, size=9),
-            text=[f"  {fn:.3f}"], textposition="top center",
-            textfont=dict(color=RED, size=12, family=FONT_MONO),
-            cliponaxis=False, showlegend=False, hoverinfo="skip"))
-        fig.update_xaxes(title_text="N1 [%]")
-        _dash(fig, "Poussée FN")
-        st.plotly_chart(fig, config=PLOTLY_CONF)
-    with gR:
-        fig = go.Figure()
-        for M in machs:
-            fig.add_trace(go.Scatter(
-                x=n1s, y=mod_prop.get_fuel_flow(n1s, M, h, disa), name=f"M={M:.2f}",
-                hovertemplate="N1 : %{x:.1f} %<br>WF : %{y:.4f} kg/s"
-                              "<extra>M=" + f"{M:.2f}</extra>"))
-        fig.add_trace(go.Scatter(
-            x=[n1], y=[wf], mode="markers+text", marker=dict(color=RED, size=9),
-            text=[f"  {wf:.3f}"], textposition="top center",
-            textfont=dict(color=RED, size=12, family=FONT_MONO),
-            cliponaxis=False, showlegend=False, hoverinfo="skip"))
-        fig.update_xaxes(title_text="N1 [%]")
-        _dash(fig, "Débit WF [kg/s]", legend=True)
-        st.plotly_chart(fig, config=PLOTLY_CONF)
+    gL, gR = st.columns(2, gap="large")
+    _mono2d(gL, "Poussée F<sub>N</sub> vs N1", SUB,
+            lambda x, M: mod_prop.get_thrust(x, M, h, disa), fn, f"{fn:.3f}")
+    _mono2d(gR, "Débit W<sub>F</sub> vs N1", SUB,
+            lambda x, M: mod_prop.get_fuel_flow(x, M, h, disa), wf,
+            f"{wf:.3f} kg/s")
 
-    machs_3d = np.linspace(0.0, 0.85, 40)
+    # surfaces 3D monochromes
+    machs_3d = np.linspace(0.0, 0.89, 40)
     N1g, Mg = np.meshgrid(n1s, machs_3d)
-    fn_surf = mod_prop.get_thrust(N1g, Mg, h, disa)
-    wf_surf = mod_prop.get_fuel_flow(N1g, Mg, h, disa)
-    s1, s2 = st.columns(2)
-    for col, (surf, nom, z_cur) in zip(
-            (s1, s2), ((fn_surf, "FN", fn), (wf_surf, "WF", wf))):
-        fig = go.Figure(go.Surface(
-            x=N1g, y=Mg, z=surf, colorscale=SCALE_MODULES, showscale=False,
-            contours=_contours(n1s, machs_3d),
-            hovertemplate="N1 : %{x:.1f} %<br>Mach : %{y:.2f}<br>"
-                          f"{nom} : %{{z:.4f}}<extra></extra>"))
-        fig.add_trace(go.Scatter3d(
-            x=[n1], y=[mach], z=[z_cur], mode="markers",
-            marker=dict(color=RED, size=5), showlegend=False, name="point"))
-        fig.update_layout(height=340, template="plotly_white",
-                          font=dict(family=FONT_UI), margin=dict(t=42, b=8, l=8, r=8),
-                          title=f"Surface {nom}",
-                          scene=_scene3d("N1", "Mach", nom))
-        col.plotly_chart(fig, config=PLOTLY_CONF)
+    s1, s2 = st.columns(2, gap="large")
+    surfs = ((mod_prop.get_thrust(N1g, Mg, h, disa),
+              "Surface — F<sub>N</sub> (N1, Mach)",
+              "poussée par moteur · altitude courante", fn),
+             (mod_prop.get_fuel_flow(N1g, Mg, h, disa),
+              "Surface — W<sub>F</sub> (N1, Mach)",
+              "débit carburant par moteur · altitude courante", wf))
+    for col, (zz, nom, sub, z_cur) in zip((s1, s2), surfs):
+        with col:
+            with st.container(border=True):
+                st.markdown(f'<div class="dash-chart-head"><div>'
+                            f'<span class="nm">{nom}</span>'
+                            f'<span class="dash-chart-sub">{sub}</span></div></div>',
+                            unsafe_allow_html=True)
+                fig = go.Figure(go.Surface(x=N1g, y=Mg, z=zz,
+                    colorscale=_mono_scale(acc_v), showscale=False,
+                    contours=_contours(n1s, machs_3d),
+                    hovertemplate="N1 %{x:.0f} %<br>Mach %{y:.2f}<br>"
+                                  "%{z:.4g}<extra></extra>"))
+                fig.add_trace(go.Scatter3d(x=[n1], y=[mach], z=[z_cur],
+                    mode="markers", marker=dict(color="white", size=5,
+                    line=dict(color=acc_d, width=2)), showlegend=False))
+                fig.update_layout(height=320, template="plotly_white",
+                    font=dict(family=FONT_UI), margin=dict(t=6, b=6, l=6, r=6),
+                    scene=_scene3d("N1", "Mach", ""))
+                st.plotly_chart(fig, config=PLOTLY_CONF)
 
-    fig = make_subplots(rows=1, cols=3,
-                        subplot_titles=("EI NOx [g/kg]", "EI CO [g/kg]",
-                                        "EI UHC [g/kg]"))
-    for M in machs:
-        e = mod_prop.get_emission_indices(n1s, M, h, disa)
-        for i, key in enumerate(("EI_NOx", "EI_CO", "EI_UHC"), start=1):
-            fig.add_trace(go.Scatter(
-                x=n1s, y=e[key], name=f"M={M:.2f}", legendgroup=f"{M:.2f}",
-                showlegend=(i == 1),
-                hovertemplate="N1 : %{x:.1f} %<br>" + key + " : %{y:.3f}"
-                              " g/kg<extra>M=" + f"{M:.2f}</extra>"),
-                row=1, col=i)
-    for i, key in enumerate(("EI_NOx", "EI_CO", "EI_UHC"), start=1):
-        fig.add_trace(go.Scatter(
-            x=[n1], y=[ei[key]], mode="markers+text", marker=dict(color=RED, size=9),
-            text=[f"  {ei[key]:.2f}"], textposition="top center",
-            textfont=dict(color=RED, size=11.5, family=FONT_MONO),
-            cliponaxis=False, showlegend=False, hoverinfo="skip"), row=1, col=i)
-    fig.update_xaxes(title_text="N1 [%]")
-    fig.update_layout(height=320, template="plotly_white", font=dict(family=FONT_UI),
-                      colorway=APPLE_SEQ, margin=dict(t=48, b=40, l=10, r=10),
-                      title="Indices d'émission vs N1")
-    st.plotly_chart(fig, config=PLOTLY_CONF)
+    # ── Émissions (échelle commune) + carte moteur ────────────────────────
+    eL, eR = st.columns(2, gap="large")
+    with eL:
+        with st.container(border=True):
+            st.markdown("<div class=\"dash-chart-head\"><div>"
+                        "<span class=\"nm\">Indices d'émission vs N1</span>"
+                        "<span class=\"dash-chart-sub\">indice d'émission "
+                        "[g/kg carburant] · échelle commune</span></div></div>",
+                        unsafe_allow_html=True)
+            ec = mod_prop.get_emission_indices(n1s, mach, h, disa)
+            fig = go.Figure()
+            for key, name, color in (("EI_NOx", "NOx", "#FF9F0A"),
+                                     ("EI_CO", "CO", "#0A84FF"),
+                                     ("EI_UHC", "UHC", "#30D158")):
+                fig.add_trace(go.Scatter(x=n1s, y=ec[key], name=name, mode="lines",
+                    line=dict(color=color, width=2.6),
+                    hovertemplate="N1 %{x:.0f} %<br>" + name +
+                                  " %{y:.2f} g/kg<extra></extra>"))
+                fig.add_trace(go.Scatter(x=[n1], y=[ei[key]], mode="markers",
+                    marker=dict(color="white", size=11,
+                                line=dict(color=color, width=3)),
+                    showlegend=False, hoverinfo="skip"))
+            fig.update_xaxes(title_text="N1 [%]", showgrid=False, zeroline=False,
+                color="#8B93A1")
+            fig.update_yaxes(showgrid=True, gridcolor="rgba(60,60,67,.07)",
+                zeroline=False, color="#8B93A1", rangemode="tozero")
+            fig.update_layout(height=300, template="plotly_white",
+                font=dict(family=FONT_UI), margin=dict(t=8, b=34, l=8, r=8),
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                legend=dict(orientation="h", y=1.16, x=1, xanchor="right",
+                            font=dict(size=11)))
+            st.plotly_chart(fig, config=PLOTLY_CONF)
+    with eR:
+        with st.container(border=True):
+            st.markdown('<div class="dash-chart-head"><div>'
+                        '<span class="nm">Rolls-Royce Trent 970</span>'
+                        '<span class="dash-chart-sub">turboréacteur à fort taux '
+                        'de dilution · A380</span></div></div>',
+                        unsafe_allow_html=True)
+            _eng = ASSETS / "a380-trent970.jpg"
+            if _eng.exists():
+                st.image(str(_eng), width="stretch")
 
     # ── Détails repliables (sous le tableau de bord) ───────────────────────
     with st.expander("Grandeurs intermédiaires & formules"):
@@ -1287,26 +1454,31 @@ def page_prop():
 
 def page_trim():
     acc_d, acc_v = ACCENTS["Équilibrage (Trim)"]
-    page_head("Équilibrage longitudinal",
-              "Résolution du trim — incidence α, calage du plan δstab et "
-              "poussée F_N par convergence simultanée des trois équations "
-              "d'équilibre (Ghazi & Botez), puis N1 et débit W_F.",
-              accent=acc_v)
-    st.markdown(_DASH_CSS, unsafe_allow_html=True)
+    st.markdown(_DASH_CSS + _RP_CSS, unsafe_allow_html=True)
 
-    # ── Contrôles toujours visibles ────────────────────────────────────────
-    with st.container(border=True):
-        a1, a2, a3 = st.columns(3)
-        mass = a1.slider("Masse [t]", 300.0, 575.0, 450.0, 1.0,
-                         key="trim_mass") * 1000.0
-        mach = a2.slider("Mach", 0.50, 0.89, 0.85, 0.01, key="trim_mach")
-        h = a3.slider("Altitude [m]", 0.0, 13000.0, 11000.0, 100.0,
-                      key="trim_h")
-        b1, b2, b3 = st.columns(3)
-        disa = b1.slider("ΔISA [°C]", -20.0, 20.0, 0.0, 1.0, key="trim_disa")
-        xcg = b2.slider("Centrage x_cg [MAC]", 0.20, 0.45, 0.32, 0.005,
-                        key="trim_xcg")
-        gamma = b3.slider("Pente γ [°]", -5.0, 8.0, 0.0, 0.1, key="trim_gamma")
+    with st.container(border=True, key="rp_panel"):
+        st.markdown('<div class="rp-head">Configuration & vol</div>'
+                    '<div class="rp-sub">Masse, vol, centrage, pente</div>',
+                    unsafe_allow_html=True)
+        mass = _rp_ctrl("Masse", 300.0, 575.0, 450.0, 1.0, "trim_mass",
+                        "t") * 1000.0
+        mach = _rp_ctrl("Mach", 0.50, 0.89, 0.85, 0.01, "trim_mach", "", "{:.2f}")
+        h = _rp_ctrl("Altitude", 0.0, 13000.0, 11000.0, 100.0, "trim_h", "m")
+        disa = _rp_ctrl("ΔISA", -20.0, 20.0, 0.0, 1.0, "trim_disa", "°C")
+        xcg = _rp_ctrl("Centrage x_cg", 0.20, 0.45, 0.32, 0.005, "trim_xcg",
+                       "MAC", "{:.2f}")
+        gamma = _rp_ctrl("Pente γ", -5.0, 8.0, 0.0, 0.1, "trim_gamma", "°",
+                         "{:.0f}")
+        if st.button("Réinitialiser", width="stretch"):
+            for _k, _d in (("trim_mass", 450.0), ("trim_mach", 0.85),
+                           ("trim_h", 11000.0), ("trim_disa", 0.0),
+                           ("trim_xcg", 0.32), ("trim_gamma", 0.0)):
+                st.session_state[f"{_k}_slider"] = _d
+            st.rerun()
+
+    page_head("Équilibrage longitudinal",
+              "Trim — α, δstab, F_N (Ghazi & Botez) · paramètres dans le "
+              "panneau de droite →", accent=acc_v)
 
     model = load_aero_model()
     try:
@@ -1357,12 +1529,15 @@ def page_trim():
                 showlegend=False,
                 hovertemplate="it %{x:.0f}<br>%{y:.3f}<extra></extra>"),
                 row=1, col=col)
-            figc.add_hline(y=conv, line=dict(color=RED, width=1, dash="dot"),
-                           row=1, col=col)
-        figc.update_xaxes(title_text="Itération")
+            figc.add_hline(y=conv, line=dict(color=_rgba(acc_d, .55), width=1,
+                           dash="dot"), row=1, col=col)
+        figc.update_xaxes(title_text="Itération", color="#8B93A1")
+        figc.update_yaxes(gridcolor="rgba(60,60,67,.07)", color="#8B93A1")
         figc.update_layout(height=290, template="plotly_white",
                            font=dict(family=FONT_UI),
-                           margin=dict(t=28, b=36, l=10, r=10))
+                           margin=dict(t=28, b=36, l=10, r=10),
+                           plot_bgcolor="rgba(0,0,0,0)",
+                           paper_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(figc, config=PLOTLY_CONF)
 
     # ── Équilibre portance | moment ────────────────────────────────────────
@@ -1387,10 +1562,16 @@ def page_trim():
                 hovertemplate="α %{x:.2f}°<br>CL %{y:.4f}<extra></extra>"))
             fig.add_hline(y=cl_req, line=dict(color="#8B93A1", width=1, dash="dash"))
             fig.add_trace(go.Scatter(x=[r['alpha']], y=[cl_req], mode="markers",
-                marker=dict(color=RED, size=10), showlegend=False, hoverinfo="skip"))
+                marker=dict(color="white", size=11,
+                            line=dict(color=acc_d, width=3)),
+                showlegend=False, hoverinfo="skip"))
+            fig.update_xaxes(showgrid=False, zeroline=False, color="#8B93A1")
+            fig.update_yaxes(showgrid=True, gridcolor="rgba(60,60,67,.07)",
+                             zeroline=False, color="#8B93A1")
             fig.update_layout(height=270, template="plotly_white",
                 font=dict(family=FONT_UI), margin=dict(t=8, b=34, l=10, r=12),
-                xaxis_title="α [°]", yaxis_title="CL")
+                xaxis_title="α [°]", yaxis_title="CL",
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig, config=PLOTLY_CONF)
     with e2:
         with st.container(border=True):
@@ -1404,10 +1585,16 @@ def page_trim():
                 hovertemplate="δstab %{x:.2f}°<br>M %{y:.3f} MN·m<extra></extra>"))
             fig.add_hline(y=0.0, line=dict(color="#8B93A1", width=1, dash="dash"))
             fig.add_trace(go.Scatter(x=[r['dstab']], y=[0.0], mode="markers",
-                marker=dict(color=RED, size=10), showlegend=False, hoverinfo="skip"))
+                marker=dict(color="white", size=11,
+                            line=dict(color=acc_d, width=3)),
+                showlegend=False, hoverinfo="skip"))
+            fig.update_xaxes(showgrid=False, zeroline=False, color="#8B93A1")
+            fig.update_yaxes(showgrid=True, gridcolor="rgba(60,60,67,.07)",
+                             zeroline=False, color="#8B93A1")
             fig.update_layout(height=270, template="plotly_white",
                 font=dict(family=FONT_UI), margin=dict(t=8, b=34, l=10, r=12),
-                xaxis_title="δstab [°]", yaxis_title="M [MN·m]")
+                xaxis_title="δstab [°]", yaxis_title="M [MN·m]",
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig, config=PLOTLY_CONF)
 
     # ── Système d'équilibre : 3 équations + résidus ────────────────────────
@@ -1501,7 +1688,6 @@ def apply_page_background():
                     0 10px 30px rgba(16, 24, 40, .06);
     }}
     </style>
-    <div id="sb-hot"></div>
     """, unsafe_allow_html=True)
 
 
@@ -1541,36 +1727,40 @@ def apply_sidebar_background():
     [data-testid="stSidebarContent"], [data-testid="stSidebarUserContent"] {
         background: transparent !important; }
     /* marque */
-    .sb-brand { display:flex; align-items:center; gap:13px; padding:14px 4px 12px; }
-    .sb-badge { width:46px; height:46px; border-radius:13px; display:grid;
+    .sb-brand { display:flex; align-items:center; gap:13px; padding:14px 2px 12px; }
+    .sb-badge { width:44px; height:44px; border-radius:13px; display:grid;
         place-items:center; font-family:ui-monospace,"SF Mono",monospace;
-        font-size:16px; font-weight:600; letter-spacing:-.02em; color:#DBE6F5;
+        font-size:15px; font-weight:600; letter-spacing:-.02em; color:#DBE6F5;
+        flex:0 0 auto;
         background:linear-gradient(160deg, rgba(255,255,255,.16), rgba(255,255,255,.03));
         border:1px solid rgba(255,255,255,.16);
         box-shadow:inset 0 1px 0 rgba(255,255,255,.18), 0 4px 12px rgba(0,0,0,.25); }
     .sb-name { font-size:15px; font-weight:600; letter-spacing:-.01em; color:#fff; }
     .sb-role { font-size:12.5px; color:#8EA2BD; margin-top:1px; }
     .sb-seclabel { font-size:10.5px; font-weight:700; letter-spacing:.16em;
-        color:#5D728F; text-transform:uppercase; padding:8px 8px 6px; }
-    /* items de nav (liens) */
-    .sb-nav { display:flex; flex-direction:column; gap:3px; padding-left:6px; }
+        color:#5D728F; text-transform:uppercase; padding:8px 0 6px 24px; }
+    /* items de nav : tuile carrée centrée dans le rail via margin auto */
+    .sb-nav { display:flex; flex-direction:column; gap:5px; padding:2px 0; }
     a.sb-item { --c:#93A6C1; position:relative; display:flex; align-items:center;
-        gap:13px; height:44px; padding:0 12px; border-radius:11px; color:#B7C6DC;
-        text-decoration:none !important; border:1px solid transparent;
-        transition:background .16s, color .16s, border-color .16s; }
-    a.sb-item .ico { width:22px; height:22px; display:grid; place-items:center;
-        color:var(--c); flex:0 0 auto; }
-    a.sb-item .ico svg { width:20px; height:20px; }
+        gap:0; height:52px; padding:0; color:#B7C6DC;
+        text-decoration:none !important; transition:color .16s; }
+    a.sb-item .ico { width:44px; height:44px; border-radius:13px; flex:0 0 auto;
+        margin:0 auto; display:grid; place-items:center; color:var(--c);
+        background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08);
+        transition:margin .26s cubic-bezier(.4,0,.2,1), background .16s,
+                   box-shadow .16s, border-color .16s; }
+    a.sb-item .ico svg { width:21px; height:21px; }
     a.sb-item .lbl { font-size:14.5px; font-weight:500; letter-spacing:-.01em;
-        color:inherit; }
-    a.sb-item:hover { background:rgba(255,255,255,.055); color:#E6EEFB; }
-    a.sb-item.active { background:linear-gradient(180deg, rgba(255,255,255,.13),
-        rgba(255,255,255,.06)); border-color:rgba(255,255,255,.13); color:#fff;
-        box-shadow:inset 0 1px 0 rgba(255,255,255,.14), 0 6px 16px -8px rgba(0,0,0,.5); }
+        color:inherit; margin-left:0; }
+    a.sb-item:hover { color:#E6EEFB; }
+    a.sb-item:hover .ico { background:rgba(255,255,255,.10); }
+    a.sb-item.active { color:#fff; }
+    a.sb-item.active .ico {
+        background:color-mix(in srgb, var(--c) 24%, transparent);
+        border-color:color-mix(in srgb, var(--c) 45%, transparent);
+        box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--c) 30%, transparent),
+                   0 5px 16px -5px var(--c); }
     a.sb-item.active .lbl { font-weight:600; }
-    a.sb-item.active::before { content:""; position:absolute; left:-6px; top:50%;
-        transform:translateY(-50%); width:4px; height:22px; border-radius:0 3px 3px 0;
-        background:var(--c); box-shadow:0 0 12px var(--c); }
     /* pied ÉTS, collé en bas */
     .sb-foot { margin-top:auto; padding:16px 4px 6px;
         border-top:1px solid rgba(255,255,255,.07); }
@@ -1587,6 +1777,39 @@ def apply_sidebar_background():
     </style>
     """, unsafe_allow_html=True)
 
+    # Icônes SVG colorées par module, posées en ::before sur chaque label radio
+    rules = []
+    for i, name in enumerate(PAGES, start=1):
+        paths, color = _NAV_ICONS.get(name, ("", "#9FB1CB"))
+        svg = ("<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' "
+               "viewBox='0 0 24 24' fill='none' stroke='" + color + "' "
+               "stroke-width='1.9' stroke-linecap='round' "
+               "stroke-linejoin='round'>" + paths + "</svg>")
+        uri = "data:image/svg+xml," + quote(svg)
+        rules.append('[data-testid="stSidebar"] [role="radiogroup"] > '
+                     'label:nth-child(' + str(i) + ')::before '
+                     '{ background-image: url("' + uri + '"); }')
+    st.markdown("<style>" + "".join(rules) + "</style>", unsafe_allow_html=True)
+
+
+# Ruban gauche réduit (icônes seules) dans un module ; déroulé à l'Accueil
+_RAIL_CSS = """
+<style>
+/* rail gauche en flux normal, juste rétréci : Streamlit réserve sa place */
+[data-testid="stSidebar"] { width: 86px !important; min-width: 86px !important;
+    overflow: hidden !important; }
+[data-testid="stSidebar"] [role="radiogroup"] p { display: none !important; }
+[data-testid="stSidebar"] [role="radiogroup"] > label { justify-content: center; }
+[data-testid="stSidebar"] [role="radiogroup"] > label::before {
+    margin-right: 0 !important; }
+[data-testid="stSidebar"] .sb-meta,
+[data-testid="stSidebar"] .sb-seclabel,
+[data-testid="stSidebar"] .sb-foot { display: none !important; }
+[data-testid="stSidebar"] .sb-brand { justify-content: center;
+    padding-left: 0 !important; padding-right: 0 !important; }
+</style>
+"""
+
 
 # Navigation par les cartes de l'accueil : ?page=<module> dans l'URL
 if "page" in st.query_params:
@@ -1598,33 +1821,26 @@ if "page" in st.query_params:
 apply_page_background()
 apply_sidebar_background()
 
-# Module actif (piloté par les liens ?page= ci-dessous, défaut Accueil)
-choix_page = st.session_state.get("nav", "Accueil")
-if choix_page not in PAGES:
-    choix_page = "Accueil"
-
-# Navigation : items HTML avec icône colorée par module (liens ?page=)
-_items = ""
-for _name in PAGES:
-    _icon, _color = _NAV_ICONS.get(_name, ("", "#93A6C1"))
-    _cls = "sb-item active" if _name == choix_page else "sb-item"
-    _items += (
-        f'<a class="{_cls}" style="--c:{_color}" target="_self" '
-        f'href="?page={quote(_name)}">'
-        f'<span class="ico"><svg viewBox="0 0 24 24" fill="none" '
-        f'stroke="currentColor" stroke-width="1.9" stroke-linecap="round" '
-        f'stroke-linejoin="round">{_icon}</svg></span>'
-        f'<span class="lbl">{_name}</span></a>')
-
+# Marque + label « Module » (en haut du volet)
 st.sidebar.markdown(
     '<div class="sb-brand"><div class="sb-badge">380</div>'
-    '<div><div class="sb-name">A380 — MGA803</div>'
+    '<div class="sb-meta"><div class="sb-name">A380 — MGA803</div>'
     '<div class="sb-role">Performances avion</div></div></div>'
-    '<div class="sb-seclabel">Module</div>'
-    f'<nav class="sb-nav">{_items}</nav>'
+    '<div class="sb-seclabel">Module</div>', unsafe_allow_html=True)
+
+# Navigation native (rerun léger, AUCUN rechargement). Les icônes colorées par
+# module sont injectées en CSS (::before) dans apply_sidebar_background().
+choix_page = st.sidebar.radio(
+    "Module", list(PAGES), key="nav", label_visibility="collapsed")
+
+st.sidebar.markdown(
     '<div class="sb-foot"><div class="ft">Analyse et optimisation des '
     'performances des avions</div>'
     '<div class="fm"><span class="pip"></span>ÉTS · É2026</div></div>',
     unsafe_allow_html=True)
+
+# Réduit le ruban gauche dans un module ; reste déroulé à l'Accueil
+if choix_page != "Accueil":
+    st.markdown(_RAIL_CSS, unsafe_allow_html=True)
 
 PAGES[choix_page]()
