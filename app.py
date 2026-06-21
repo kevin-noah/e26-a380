@@ -75,8 +75,9 @@ def _rgba(hexc, a):
 
 
 def _mono_scale(acc_v):
-    """Échelle de couleurs monochrome (clair → accent) pour les surfaces 3D."""
-    return [[0.0, _rgba(acc_v, .12)], [0.45, _rgba(acc_v, .55)],
+    """Échelle de couleurs monochrome (clair → accent) pour les surfaces 3D.
+    Bas de l'échelle renforcé (.50) pour éviter le quasi-blanc."""
+    return [[0.0, _rgba(acc_v, .50)], [0.5, _rgba(acc_v, .75)],
             [1.0, acc_v]]
 
 # Piles de polices : Helvetica Neue en premier (préférence utilisateur),
@@ -737,10 +738,10 @@ def page_atm():
         st.markdown('<div class="rp-head">Paramètres</div>'
                     '<div class="rp-sub">Saisie directe ou ajustement au slider'
                     '</div>', unsafe_allow_html=True)
-        h = _rp_ctrl("Altitude", 0.0, 20000.0, 11700.0, 50.0, "atm_h", "m")
+        h = _rp_ctrl("Altitude", 0.0, 20000.0, 10000.0, 50.0, "atm_h", "m")
         disa = _rp_ctrl("ΔISA", -30.0, 30.0, 0.0, 1.0, "atm_disa", "°C")
         if st.button("Réinitialiser", width="stretch"):
-            for _k, _d in (("atm_h", 11700.0), ("atm_disa", 0.0)):
+            for _k, _d in (("atm_h", 10000.0), ("atm_disa", 0.0)):
                 st.session_state[f"{_k}_slider"] = _d
             st.rerun()
 
@@ -875,11 +876,11 @@ def page_conv():
             val = _rp_ctrl(f"Entrée — {typ}", 100.0, 400.0, 280.0, 1.0,
                            "conv_spd", "kt")
             val_si = val * KT
-        h = _rp_ctrl("Altitude", 0.0, 13100.0, 11000.0, 50.0, "conv_h", "m")
+        h = _rp_ctrl("Altitude", 0.0, 13100.0, 10000.0, 50.0, "conv_h", "m")
         disa = _rp_ctrl("ΔISA", -30.0, 30.0, 0.0, 1.0, "conv_disa", "°C")
         if st.button("Réinitialiser", width="stretch"):
             for _k, _d in (("conv_mach", 0.80), ("conv_spd", 280.0),
-                           ("conv_h", 11000.0), ("conv_disa", 0.0)):
+                           ("conv_h", 10000.0), ("conv_disa", 0.0)):
                 st.session_state[f"{_k}_slider"] = _d
             st.rerun()
 
@@ -1032,13 +1033,13 @@ def page_aero():
                     '</div>', unsafe_allow_html=True)
         alpha = _rp_ctrl("Incidence α", a_min, a_max, 2.0, 0.1, "aero_alpha",
                          "°", "{:.0f}")
-        mach = _rp_ctrl("Mach", m_min, m_max, float(min(0.84, m_max)), 0.01,
+        mach = _rp_ctrl("Mach", m_min, m_max, float(min(0.80, m_max)), 0.01,
                         "aero_mach", "", "{:.2f}")
         dit = _rp_ctrl("Calage δit", -10.0, 10.0, 0.0, 0.5, "aero_dit", "°",
                        "{:.0f}")
         if st.button("Réinitialiser", width="stretch"):
             for _k, _d in (("aero_alpha", 2.0),
-                           ("aero_mach", float(min(0.84, m_max))),
+                           ("aero_mach", float(min(0.80, m_max))),
                            ("aero_dit", 0.0)):
                 st.session_state[f"{_k}_slider"] = _d
             st.rerun()
@@ -1277,12 +1278,12 @@ def page_prop():
                     '<div class="rp-sub">Saisie directe ou ajustement au slider'
                     '</div>', unsafe_allow_html=True)
         n1 = _rp_ctrl("N1", 18.0, 100.0, 90.0, 0.5, "prop_n1", "%", "{:.1f}")
-        mach = _rp_ctrl("Mach", 0.0, 0.89, 0.85, 0.01, "prop_mach", "", "{:.2f}")
-        h = _rp_ctrl("Altitude", 0.0, 13000.0, 10670.0, 50.0, "prop_h", "m")
+        mach = _rp_ctrl("Mach", 0.0, 0.89, 0.80, 0.01, "prop_mach", "", "{:.2f}")
+        h = _rp_ctrl("Altitude", 0.0, 13000.0, 10000.0, 50.0, "prop_h", "m")
         disa = _rp_ctrl("ΔISA", -25.0, 35.0, 0.0, 1.0, "prop_disa", "°C")
         if st.button("Réinitialiser", use_container_width=True):
-            for _k, _d in (("prop_n1", 90.0), ("prop_mach", 0.85),
-                           ("prop_h", 10670.0), ("prop_disa", 0.0)):
+            for _k, _d in (("prop_n1", 90.0), ("prop_mach", 0.80),
+                           ("prop_h", 10000.0), ("prop_disa", 0.0)):
                 st.session_state[f"{_k}_slider"] = _d
             st.rerun()
 
@@ -1475,12 +1476,12 @@ def page_trim():
         st.markdown('<div class="rp-head">Configuration & vol</div>'
                     '<div class="rp-sub">Masse, vol, centrage, pente</div>',
                     unsafe_allow_html=True)
-        mass = _rp_ctrl("Masse", 300.0, 575.0, 300.0, 1.0, "trim_mass",
+        mass = _rp_ctrl("Masse", 300.0, 575.0, 500.0, 1.0, "trim_mass",
                         "t") * 1000.0
-        mach = _rp_ctrl("Mach", 0.50, 0.89, 0.55, 0.01, "trim_mach", "", "{:.2f}")
-        h = _rp_ctrl("Altitude", 0.0, 13000.0, 6000.0, 100.0, "trim_h", "m")
+        mach = _rp_ctrl("Mach", 0.50, 0.89, 0.80, 0.01, "trim_mach", "", "{:.2f}")
+        h = _rp_ctrl("Altitude", 0.0, 13000.0, 10000.0, 100.0, "trim_h", "m")
         disa = _rp_ctrl("ΔISA", -20.0, 20.0, 0.0, 1.0, "trim_disa", "°C")
-        xcg = _rp_ctrl("Centrage x_cg", 0.20, 0.45, 0.32, 0.005, "trim_xcg",
+        xcg = _rp_ctrl("Centrage x_cg", 0.20, 0.45, 0.40, 0.005, "trim_xcg",
                        "MAC", "{:.2f}")
         gamma = _rp_ctrl("Pente γ", -5.0, 8.0, 0.0, 0.1, "trim_gamma", "°",
                          "{:.0f}")
@@ -1509,9 +1510,9 @@ def page_trim():
             format_func=lambda v: f"{v:g}", label_visibility="collapsed")
 
         if st.button("Réinitialiser", width="stretch"):
-            for _k, _d in (("trim_mass", 300.0), ("trim_mach", 0.55),
-                           ("trim_h", 6000.0), ("trim_disa", 0.0),
-                           ("trim_xcg", 0.32), ("trim_gamma", 0.0)):
+            for _k, _d in (("trim_mass", 500.0), ("trim_mach", 0.80),
+                           ("trim_h", 10000.0), ("trim_disa", 0.0),
+                           ("trim_xcg", 0.40), ("trim_gamma", 0.0)):
                 st.session_state[f"{_k}_slider"] = _d
             st.session_state["trim_eps_alpha"] = 1e-3
             st.session_state["trim_eps_dstab"] = 1e-3

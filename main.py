@@ -713,7 +713,7 @@ def print_trim_menu():
     print("       --eps-fn    : tolérance convergence sur F_N     [N]   (défaut 10)")
     print("       --eps-dstab : tolérance convergence sur δstab   [deg] (défaut 1e-3)")
     print()
-    print("  Exemple :  trim --mass 300000 --mach 0.55 --h 6000")
+    print("  Exemple :  trim --mass 500000 --mach 0.80 --h 10000")
     print()
     print("  info   Constantes du modèle (φ_T, positions moteurs, F_N^max, W_F^max…)")
     print("  help   Afficher cette aide")
