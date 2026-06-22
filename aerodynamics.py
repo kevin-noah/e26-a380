@@ -25,6 +25,13 @@ DESCRIPTION = "CL, CD, Cm en fonction de α et Mach — A380 (OpenVSP)"
 # (traînée d'onde). On les remplace par une extrapolation spline du domaine fiable.
 MACH_CUT = 0.7
 
+# Traînée : on lit la colonne near-field CDtot (= CDo + CDi near-field), choix
+# qui reproduit la correction du prof (F_N ≈ 510 kN à it.1 au point 500 t/M0.8/
+# 10 km, finesse ≈9.6). ⚠️ Le near-field surestime la traînée induite ×2–4 vs le
+# plan de Trefftz `CDtot_t` (induit physique, e≈0.85, finesse ~24) : conséquence
+# assumée — la croisière reste limitée en poussée (on s'arrête à F_N, l'inversion
+# N1 ne boucle pas). Pour un modèle physique, lire `CDtot_t` à la place.
+
 # Chemin par défaut vers les fichiers de données (dossier data/ du projet)
 _DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 DEFAULT_FILE_WB = os.path.join(_DATA_DIR, 'Avion_WB_VSPGeom.history')
@@ -150,7 +157,7 @@ def build_aero_model(file_wb=DEFAULT_FILE_WB, file_ht=DEFAULT_FILE_HT):
     return {
         # Wing-Body : extrapolation spline au-delà de M0.7 (transso non physique)
         'f_clwb': _build_grid(df_wb, 'CL',    extrapolate=True),
-        'f_cdwb': _build_grid(df_wb, 'CDtot', extrapolate=True),  # near-field
+        'f_cdwb': _build_grid(df_wb, 'CDtot', extrapolate=True),  # near-field (cf. choix prof)
         'f_cmwb': _build_grid(df_wb, 'CMy',   extrapolate=True),
         # Empennage horizontal : lecture directe des données OpenVSP (pas d'extrap)
         'f_clht': _build_grid(df_ht, 'CL'),

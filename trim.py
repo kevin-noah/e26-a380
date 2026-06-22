@@ -185,7 +185,7 @@ def n1_from_thrust(fn_engine, mach, altitude, delta_isa=0.0):
     Inverse le modèle de poussée : trouve le régime N1 [%] qui produit la
     poussée `fn_engine` (par moteur) au Mach et à l'altitude donnés.
     """
-    f = lambda n: _thrust_N(n, mach, altitude, delta_isa) - fn_engine
+    f = lambda n: _thrust_N(n, mach, altitude, delta_isa) - fn_engine/4
     fmin, fmax = f(N1_MIN), f(N1_MAX)
     if fmin * fmax > 0:
         fn_max = _thrust_N(N1_MAX, mach, altitude, delta_isa)
