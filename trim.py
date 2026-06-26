@@ -84,8 +84,19 @@ def _thrust_N(n1, mach, altitude, delta_isa=0.0):
 
 
 def _fuel_flow_kgs(n1, mach, altitude, delta_isa=0.0):
-    """Débit carburant d'un moteur en kg/s (get_fuel_flow × FUEL_SCALE)."""
-    return mod_prop.get_fuel_flow(n1, mach, altitude, delta_isa) * FUEL_SCALE
+    """Débit carburant CORRIGÉ d'un moteur en kg/s.
+
+    Cohérent avec l'inversion N1 en poussée corrigée (cf. n1_from_thrust) : on
+    retire le lapse δ√θ que get_fuel_flow réapplique (WF = W*_f·δ√θ) pour repasser
+    au débit corrigé W*_f·FUEL_SCALE. Sans ça, W_F est ~5-7× trop bas en altitude
+    (le lapse δ domine) → SR irréaliste et ECON (seul optimum sensible au W_F
+    ABSOLU) faux. Avec ça : W_F ≈ 7000-9000 kg/h en croisière, SR ≈ 0.05 NM/kg,
+    et MRC/LRC/ECON reproduisent la référence (0.67 / 0.71 / 0.75 à CI=160).
+    """
+    wf = mod_prop.get_fuel_flow(n1, mach, altitude, delta_isa)
+    lapse = float(mod_atm.delta(altitude, delta_isa)
+                  * np.sqrt(mod_atm.theta(altitude, delta_isa)))
+    return wf / lapse * FUEL_SCALE
 
 # Bornes de recherche des inconnues (cohérentes avec les plages du modèle aéro)
 DSTAB_MIN, DSTAB_MAX = -15.0, 15.0   # plage de calage du stabilisateur [deg]

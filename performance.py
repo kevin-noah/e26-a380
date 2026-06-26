@@ -40,6 +40,7 @@ DESCRIPTION = "Vitesses de croisière optimales — MRC, LRC, ECON (A380)"
 MACH_MIN_DEFAUT = 0.50
 MACH_MAX_DEFAUT = 0.90
 N_PTS_DEFAUT    = 41        # nombre de points d'échantillonnage du Mach
+CI_DEFAUT       = 160.0     # Cost Index par défaut [kg/min] (point de réf. du devoir)
 
 KT = 0.514444              # 1 nœud en m/s
 
@@ -124,7 +125,7 @@ def _cost_per_distance(sr, wf, tas, cost_index):
 # Vitesses de croisière optimales — MRC / LRC / ECON
 # ---------------------------------------------------------------------------
 
-def cruise_speeds(mass, altitude, delta_isa=0.0, cost_index=0.0,
+def cruise_speeds(mass, altitude, delta_isa=0.0, cost_index=CI_DEFAUT,
                   mach_min=MACH_MIN_DEFAUT, mach_max=MACH_MAX_DEFAUT,
                   n_pts=N_PTS_DEFAUT, model=None, refine=True, **trim_kw):
     """
@@ -140,7 +141,7 @@ def cruise_speeds(mass, altitude, delta_isa=0.0, cost_index=0.0,
     mass       : float  Masse de l'avion [kg]
     altitude   : float  Altitude [m]
     delta_isa  : float  Déviation ISA [°C]                       (défaut 0)
-    cost_index : float  Cost Index pour ECON [kg/min]            (défaut 0 → MRC)
+    cost_index : float  Cost Index pour ECON [kg/min]            (défaut CI_DEFAUT=160)
     mach_min/max, n_pts : bornes et finesse du balayage
     model      : dict   Modèle aéro (build_aero_model) ; construit si None
     refine     : bool   Raffinage par optimiseur après l'échantillonnage

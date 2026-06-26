@@ -560,11 +560,16 @@ def page_accueil():
         ("05", "Équilibrage (Trim)", True,
          "Équilibrage longitudinal : α, δstab et F_N par l'algorithme de "
          "Ghazi & Botez, puis N1 et débit carburant W<sub>F</sub>."),
+        ("06", "Performance croisière", True,
+         "Vitesses de croisière optimales MRC / LRC / ECON : portée spécifique "
+         "et coût d'exploitation (Cost Index) selon le nombre de Mach."),
     ]
     cards = ""
     for num, nom, dispo, desc in modules:
         paths, _ = _NAV_ICONS.get(nom, ("", ""))
         mc = ACCENTS.get(nom, (NAVY, NAVY))[1]
+        if nom == "Performance croisière":
+            mc = "#FF9F0A"        # accent orange de la page (ACCENTS reste gris en nav)
         ico = ('<span class="mc-ico"><svg viewBox="0 0 24 24" fill="none" '
                'stroke="currentColor" stroke-width="1.9" stroke-linecap="round" '
                f'stroke-linejoin="round">{paths}</svg></span>')
@@ -1735,12 +1740,52 @@ _PERF_CTRL_CSS = """
                 0 10px 30px rgba(16,24,40,.06) !important;
     padding: .65rem 1.2rem .35rem !important; margin-bottom: 1.1rem; }
 .st-key-perf_ctrlbar [data-testid="stSlider"] { padding-top: 0; }
+/* la valeur courante est affichée dans .perf-ctrl-v (haut droite) → on masque
+   la valeur native au-dessus du curseur (sinon doublon) ; min/max conservés */
+.st-key-perf_ctrlbar [data-testid="stSliderThumbValue"] { display: none; }
+/* piste remplie en ORANGE (la couleur du thème global est navy) — maquette */
+.st-key-perf_ctrlbar [data-testid="stSliderTrack"] > div { background: #FF9F0A !important; }
+.perf-ctrl-head { display:flex; align-items:baseline; justify-content:space-between;
+    gap:8px; margin:0 0 -.35rem; }
 .perf-ctrl-l { font-size: 12px; font-weight: 600; color: #3A3A3C;
-    letter-spacing: -.003em; margin: 0 0 -.5rem; white-space: nowrap; }
+    letter-spacing: -.003em; white-space: nowrap; }
+.perf-ctrl-v { font-family:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
+    font-size:14px; font-weight:500; color:#C2710A; font-variant-numeric:tabular-nums;
+    letter-spacing:-.02em; white-space:nowrap; }
+.perf-ctrl-v .u { color:#8E8E93; font-size:11px; margin-left:2px; }
 /* graphes Plotly : suivre la largeur de leur colonne (pas de volet droit ici) */
 [data-testid="stPlotlyChart"] { width: 100% !important; }
 [data-testid="stPlotlyChart"] > div, [data-testid="stPlotlyChart"] .js-plotly-plot {
     width: 100% !important; }
+/* Pastille module (en-tête), pastille KPI, bandes de légende (maquette) */
+.perf-modpill { display:inline-flex; align-items:center; gap:8px; padding:7px 13px;
+    border-radius:999px; background:rgba(255,159,10,.12); color:#C2710A;
+    font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+.perf-modpill .dot { width:8px; height:8px; border-radius:50%; background:#FF9F0A;
+    box-shadow:0 0 0 4px rgba(255,159,10,.18); }
+.kpi-swatch { width:9px; height:9px; border-radius:50%; display:inline-block;
+    margin-right:6px; vertical-align:1px; }
+.perf-legend { display:flex; flex-wrap:wrap; gap:14px; padding:2px 2px 8px;
+    font-size:11.5px; color:#6E6E73; }
+.perf-legend i { display:inline-flex; align-items:center; gap:6px; font-style:normal; }
+.perf-legend i b { width:15px; height:3px; border-radius:2px; display:inline-block; }
+.perf-legend i .sq { width:9px; height:9px; border-radius:50%; display:inline-block;
+    border:2px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.06); }
+/* Tableau récap (maquette table.recap) : pastilles, ligne ECON surlignée, mono */
+.perf-recap { width:100%; border-collapse:collapse; margin-top:6px;
+    font-variant-numeric:tabular-nums; }
+.perf-recap th, .perf-recap td { text-align:right; padding:11px 14px; font-size:13px; }
+.perf-recap th { font-size:11px; font-weight:600; color:#8E8E93;
+    text-transform:uppercase; letter-spacing:.04em;
+    border-bottom:1px solid rgba(60,60,67,.18); }
+.perf-recap th:first-child, .perf-recap td:first-child { text-align:left; }
+.perf-recap td { font-family:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
+    color:#3A3A3C; border-bottom:.5px solid rgba(60,60,67,.12); }
+.perf-recap td:first-child { font-family:inherit; font-weight:600; color:#1C1C1E; }
+.perf-recap .dotc { width:8px; height:8px; border-radius:50%; display:inline-block;
+    margin-right:8px; vertical-align:1px; }
+.perf-recap tr:last-child td { border-bottom:none; }
+.perf-recap tr.is-econ td { background:rgba(255,159,10,.07); }
 </style>
 """
 
@@ -1752,6 +1797,9 @@ def page_perf():
     acc_d, acc_v, RED = "#C2710A", "#FF9F0A", "#FF3B30"
     st.markdown(_DASH_CSS + _PERF_CTRL_CSS, unsafe_allow_html=True)
 
+    st.markdown('<div style="text-align:right;margin-bottom:.3rem">'
+                '<span class="perf-modpill"><span class="dot"></span>'
+                'Croisière · Coût</span></div>', unsafe_allow_html=True)
     page_head("Vitesses de croisière optimales",
               "MRC · LRC · ECON — portée spécifique et coût d'exploitation "
               "balayés en fonction du nombre de Mach", accent=acc_v)
@@ -1759,19 +1807,32 @@ def page_perf():
     # ── Barre de contrôles horizontale (6 paramètres, collante) ────────────
     with st.container(border=True, key="perf_ctrlbar"):
         cols = st.columns(6)
+        # (libellé, unité, min, max, défaut, pas, clé, décimales|'s' signé)
         defs = [
-            ("Masse [t]",          300.0,  575.0,   450.0,  1.0,  "perf_mass"),
-            ("Altitude [m]",         0.0, 13100.0, 10668.0, 50.0, "perf_h"),
-            ("ΔISA [°C]",          -20.0,   20.0,     0.0,  1.0,  "perf_disa"),
-            ("Cost Index [kg/min]",  0.0,  200.0,    30.0,  5.0,  "perf_ci"),
-            ("Mach min",             0.40,   0.75,    0.50, 0.01, "perf_mmin"),
-            ("Mach max",             0.78,   0.92,    0.90, 0.01, "perf_mmax"),
+            ("Masse",      "t",      300.0,  575.0,   500.0,  1.0,  "perf_mass", 0),
+            ("Altitude",   "m",        0.0, 13100.0, 10668.0, 50.0, "perf_h",    0),
+            ("ΔISA",       "°C",     -20.0,   20.0,     0.0,  1.0,  "perf_disa", "s"),
+            ("Cost Index", "kg/min",   0.0,  200.0,   160.0,  5.0,  "perf_ci",   0),
+            ("Mach min",   "",         0.40,   0.75,    0.50, 0.01, "perf_mmin", 2),
+            ("Mach max",   "",         0.78,   0.92,    0.90, 0.01, "perf_mmax", 2),
         ]
+
+        def _fv(v, d):   # valeur formatée (maquette : mono, séparateur d'espace)
+            if d == "s":
+                return ("+" if v >= 0 else "−") + str(abs(int(round(v))))
+            if d == 0:
+                return f"{int(round(v)):,}".replace(",", " ")
+            return f"{v:.{d}f}"
+
         vals = {}
-        for col, (lab, lo, hi, dflt, step, key) in zip(cols, defs):
+        for col, (lab, unit, lo, hi, dflt, step, key, dec) in zip(cols, defs):
             with col:
-                st.markdown(f'<div class="perf-ctrl-l">{lab}</div>',
-                            unsafe_allow_html=True)
+                cur = float(st.session_state.get(key, dflt))   # valeur courante
+                u = f'<span class="u">{unit}</span>' if unit else ""
+                st.markdown('<div class="perf-ctrl-head">'
+                            f'<span class="perf-ctrl-l">{lab}</span>'
+                            f'<span class="perf-ctrl-v">{_fv(cur, dec)}{u}</span>'
+                            '</div>', unsafe_allow_html=True)
                 vals[key] = st.slider(lab, lo, hi, dflt, step, key=key,
                                       label_visibility="collapsed")
     mass = vals["perf_mass"] * 1000.0
@@ -1792,21 +1853,25 @@ def page_perf():
         return
 
     # ── Bande d'indicateurs : MRC · LRC · ECON · SR max ────────────────────
-    def _kpi_speed(o, lab, tag, hl=False):
+    # Pastille de couleur devant le régime → lien visuel avec les marqueurs des
+    # graphes (MRC orange foncé, LRC orange, ECON rouge), comme la maquette.
+    def _kpi_speed(o, lab, tag, sw, hl=False):
+        lab_sw = f'<span class="kpi-swatch" style="background:{sw}"></span>{lab}'
         if o is None:
-            return _dash_kpi(lab, "—", "", "indéterminé", tag=tag, acc=acc_d)
-        return _dash_kpi(lab, f"{o['mach']:.3f}", "Mach",
+            return _dash_kpi(lab_sw, "—", "", "indéterminé", tag=tag, acc=acc_d)
+        return _dash_kpi(lab_sw, f"{o['mach']:.3f}", "Mach",
                          f"{o['tas_kt']:.0f} kt · L/D {o['finesse']:.1f}",
                          tag=tag, hl=hl, acc=acc_d)
 
     ci_tag = "≡ MRC" if ci == 0 else f"CI {ci:.0f}"
     st.markdown(
         '<div class="dash-kpi-grid" style="grid-template-columns:repeat(4,1fr)">'
-        + _kpi_speed(mrc, "MRC", "portée max")
-        + _kpi_speed(lrc, "LRC", "0.99·SR")
-        + _kpi_speed(econ, "ECON", ci_tag, hl=True)
+        + _kpi_speed(mrc, "MRC", "portée max", acc_d)
+        + _kpi_speed(lrc, "LRC", "0.99·SR", acc_v)
+        + _kpi_speed(econ, "ECON", ci_tag, RED, hl=True)
         + _dash_kpi("SR maximale", f"{r['sr_max']/1852.0:.3f}", "NM/kg",
-                    f"{r['sr_max']:.0f} m/kg · au point MRC", acc=acc_d)
+                    f"{r['sr_max']:.0f} m/kg · au point MRC",
+                    tag="portée spécifique", acc=acc_d)
         + '</div>', unsafe_allow_html=True)
 
     # ── Données de courbe ──────────────────────────────────────────────────
@@ -1855,6 +1920,17 @@ def page_perf():
                     f'<span class="cur" style="--acc:{acc_d}">{cur}</span></div>',
                     unsafe_allow_html=True)
 
+    def _legend(items):
+        """Bande de légende (maquette) : items = [(kind, couleur, libellé)],
+        kind = 'line' (trait) ou 'dot' (point cerclé blanc)."""
+        parts = []
+        for kind, col, lab in items:
+            mark = (f'<b style="background:{col}"></b>' if kind == "line"
+                    else f'<span class="sq" style="background:{col}"></span>')
+            parts.append(f"<i>{mark}{lab}</i>")
+        st.markdown('<div class="perf-legend">' + "".join(parts) + '</div>',
+                    unsafe_allow_html=True)
+
     row1 = st.columns(2)
     row2 = st.columns(2)
 
@@ -1862,6 +1938,8 @@ def page_perf():
     with row1[0], st.container(border=True):
         _chart_head("Portée spécifique", "SR = TAS / W_F",
                     f"max {r['sr_max']:.0f} m/kg")
+        _legend([("dot", acc_d, "MRC"), ("dot", acc_v, "LRC"),
+                 ("dot", RED, "ECON")])
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=machs[vsr], y=sr[vsr], mode="lines",
             line=dict(color=acc_v, width=2.6), fill="tozeroy",
@@ -1880,6 +1958,8 @@ def page_perf():
     with row1[1], st.container(border=True):
         _chart_head("Coût d'exploitation", "carburant + temps",
                     f"ECON M{econ['mach']:.3f}" if econ else "—")
+        _legend([("line", acc_v, "Coût total"), ("line", C_FUEL, "Carburant"),
+                 ("line", RED, "Temps")])
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=machs[vsr], y=total_nm[vsr], mode="lines",
             name="Coût total", line=dict(color=acc_v, width=2.8),
@@ -1901,8 +1981,7 @@ def page_perf():
                           line=dict(color="#9AA3AF", width=1, dash="dot"))
         _common(fig, "Coût [kg/NM]")
         fig.update_yaxes(rangemode="tozero")
-        fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.0,
-            xanchor="right", x=1.0, bgcolor="rgba(0,0,0,0)"))
+        fig.update_layout(showlegend=False)   # légende = bande HTML (maquette)
         st.plotly_chart(fig, config=PLOTLY_CONF)
 
     # ── 3. Finesse L/D(M) ──────────────────────────────────────────────────
@@ -1910,6 +1989,7 @@ def page_perf():
         ld_max = float(np.nanmax(ld)) if np.any(vld) else float("nan")
         _chart_head("Finesse", "L/D = f(Mach)",
                     f"max {ld_max:.1f}" if np.isfinite(ld_max) else "—")
+        _legend([("line", acc_v, "L/D"), ("dot", RED, "Régimes optimaux")])
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=machs[vld], y=ld[vld], mode="lines",
             line=dict(color=acc_v, width=2.6), showlegend=False,
@@ -1922,6 +2002,7 @@ def page_perf():
     with row2[1], st.container(border=True):
         _chart_head("Débit carburant", "W_F = f(Mach)",
                     f"{econ['wf_kgh']:.0f} kg/h @ ECON" if econ else "—")
+        _legend([("line", acc_v, "W_F (kg/h)"), ("dot", RED, "Régimes optimaux")])
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=machs[vwf], y=wfh[vwf], mode="lines",
             line=dict(color=acc_v, width=2.6), fill="tozeroy",
@@ -1937,22 +2018,29 @@ def page_perf():
 
     # ── Récapitulatif & modèle (volet dépliable, ouvert par défaut) ────────
     with st.expander("Vitesses optimales — récapitulatif & modèle", expanded=True):
-        lignes = []
-        for cle, o in (("MRC", mrc), ("LRC", lrc), ("ECON", econ)):
+        # Tableau récap stylé (maquette) : pastille couleur, ligne ECON surlignée.
+        def _i(v):   # entier à séparateur d'espace (style fr-FR de la maquette)
+            return f"{int(round(v)):,}".replace(",", " ")
+        hdr = ("<tr><th>Régime</th><th>Mach</th><th>TAS [kt]</th><th>TAS [m/s]</th>"
+               "<th>SR [m/kg]</th><th>SR [NM/kg]</th><th>W<sub>F</sub> [kg/h]</th>"
+               "<th>L/D</th></tr>")
+        body = ""
+        for cle, o, dot, hl in (("MRC", mrc, acc_d, False),
+                                ("LRC", lrc, acc_v, False),
+                                ("ECON", econ, RED, True)):
+            cls = ' class="is-econ"' if hl else ""
+            nom = (f'<td><span class="dotc" style="background:{dot}"></span>'
+                   f'{cle}</td>')
             if o is None:
-                lignes.append({"Régime": cle})
-                continue
-            lignes.append({
-                "Régime":       cle,
-                "Mach":         round(o['mach'], 4),
-                "TAS [kt]":     round(o['tas_kt'], 1),
-                "TAS [m/s]":    round(o['tas'], 1),
-                "SR [m/kg]":    round(o['sr'], 1),
-                "SR [NM/kg]":   round(o['sr_nm_per_kg'], 4),
-                "W_F [kg/h]":   round(o['wf_kgh'], 0),
-                "L/D":          round(o['finesse'], 2),
-            })
-        st.dataframe(pd.DataFrame(lignes), hide_index=True, width="stretch")
+                cells = "<td>—</td>" * 7
+            else:
+                cells = (f"<td>{o['mach']:.4f}</td><td>{o['tas_kt']:.1f}</td>"
+                         f"<td>{o['tas']:.1f}</td><td>{_i(o['sr'])}</td>"
+                         f"<td>{o['sr_nm_per_kg']:.4f}</td>"
+                         f"<td>{_i(o['wf_kgh'])}</td><td>{o['finesse']:.2f}</td>")
+            body += f"<tr{cls}>{nom}{cells}</tr>"
+        st.markdown(f'<table class="perf-recap">{hdr}{body}</table>',
+                    unsafe_allow_html=True)
         st.markdown(
             '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:.5rem 0 .2rem">'
             + "".join(
@@ -2001,13 +2089,21 @@ def apply_page_background():
     structure DOM change.
     """
     nav = st.session_state.get("nav", "Accueil")
-    vif = ACCENTS.get(nav, (NAVY, "#3E6B99"))[1]
+    if nav == "Performance croisière":
+        # Maquette « Croisière & Coût » : fond CHAUD teinté orange (deux halos
+        # orange + dégradé crème → bleuté), pour s'accorder à l'accent de la page.
+        fond = ("radial-gradient(120% 80% at 80% -12%, rgba(255,159,10,.13), "
+                "transparent 55%), radial-gradient(90% 60% at 0% 0%, "
+                "rgba(255,159,10,.06), transparent 50%), linear-gradient(180deg, "
+                "#FBF4EA 0%, #F6F4F1 40%, #EFF1F4 100%)")
+    else:
+        vif = ACCENTS.get(nav, (NAVY, "#3E6B99"))[1]
+        fond = (f"radial-gradient(120% 80% at 78% -10%, {vif}1A, transparent 55%), "
+                "linear-gradient(180deg, #EEF3FA 0%, #F3F6FA 42%, #EFF1F4 100%)")
     st.markdown(f"""
     <style>
     [data-testid="stAppViewContainer"] {{
-        background:
-          radial-gradient(120% 80% at 78% -10%, {vif}1A, transparent 55%),
-          linear-gradient(180deg, #EEF3FA 0%, #F3F6FA 42%, #EFF1F4 100%);
+        background: {fond};
         background-attachment: fixed;
     }}
     [data-testid="stHeader"] {{ background: transparent; }}
