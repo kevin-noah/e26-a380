@@ -1690,7 +1690,11 @@ def page_trim():
     # ── Détail des itérations (ligne d'équilibre surlignée) ────────────────
     with st.container(border=True):
         st.markdown("**Détail des itérations**")
-        def _f(v, n):   return "—" if v is None else round(v, n)
+        # Formatage en CHAÎNES uniformes : la ligne it.0 (estimé initial) a
+        # CL/CD/écarts = None → rendus « — ». Mélanger str (« — ») et float dans
+        # une même colonne casse la sérialisation Arrow de st.dataframe
+        # (ArrowTypeError « column CL ») → on formate tout en str (homogène).
+        def _f(v, n):   return "—" if v is None else f"{v:.{n}f}"
         def _e(v):      return "—" if v is None else f"{v:.2e}"
         df_hist = pd.DataFrame([{
             "it":          hh['it'],
@@ -1716,38 +1720,63 @@ def page_trim():
             st.caption("Ligne verte = itération d'équilibre (convergence atteinte).")
 
 
+_PERF_CTRL_CSS = """
+<style>
+/* Barre de contrôles horizontale, collante sous le titre (maquette
+   « Croisière & Coût ») — remplace le volet de droite sur cette page. */
+.st-key-perf_ctrlbar {
+    position: sticky; top: 3.4rem; z-index: 30;
+    background: rgba(255,255,255,.62) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    backdrop-filter: blur(28px) saturate(180%);
+    border: .5px solid rgba(255,255,255,.7) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 1px 2px rgba(16,24,40,.04),
+                0 10px 30px rgba(16,24,40,.06) !important;
+    padding: .65rem 1.2rem .35rem !important; margin-bottom: 1.1rem; }
+.st-key-perf_ctrlbar [data-testid="stSlider"] { padding-top: 0; }
+.perf-ctrl-l { font-size: 12px; font-weight: 600; color: #3A3A3C;
+    letter-spacing: -.003em; margin: 0 0 -.5rem; white-space: nowrap; }
+/* graphes Plotly : suivre la largeur de leur colonne (pas de volet droit ici) */
+[data-testid="stPlotlyChart"] { width: 100% !important; }
+[data-testid="stPlotlyChart"] > div, [data-testid="stPlotlyChart"] .js-plotly-plot {
+    width: 100% !important; }
+</style>
+"""
+
+
 def page_perf():
-    acc_d, acc_v = ACCENTS["Performance croisière"]
-    st.markdown(_DASH_CSS + _RP_CSS, unsafe_allow_html=True)
-
-    with st.container(border=True, key="rp_panel"):
-        st.markdown('<div class="rp-head">Croisière & coût</div>'
-                    '<div class="rp-sub">Masse, altitude, Cost Index</div>',
-                    unsafe_allow_html=True)
-        mass = _rp_ctrl("Masse", 300.0, 575.0, 450.0, 1.0, "perf_mass",
-                        "t") * 1000.0
-        h = _rp_ctrl("Altitude", 0.0, 13000.0, 10668.0, 100.0, "perf_h", "m")
-        disa = _rp_ctrl("ΔISA", -20.0, 20.0, 0.0, 1.0, "perf_disa", "°C")
-        ci = _rp_ctrl("Cost Index", 0.0, 200.0, 30.0, 5.0, "perf_ci", "kg/min")
-
-        st.markdown('<div class="rp-head" style="margin-top:.6rem">Balayage</div>'
-                    '<div class="rp-sub">Plage de Mach échantillonnée</div>',
-                    unsafe_allow_html=True)
-        mmin = _rp_ctrl("Mach min", 0.40, 0.75, 0.50, 0.01, "perf_mmin", "",
-                        "{:.2f}")
-        mmax = _rp_ctrl("Mach max", 0.78, 0.92, 0.90, 0.01, "perf_mmax", "",
-                        "{:.2f}")
-
-        if st.button("Réinitialiser", width="stretch"):
-            for _k, _d in (("perf_mass", 450.0), ("perf_h", 10668.0),
-                           ("perf_disa", 0.0), ("perf_ci", 30.0),
-                           ("perf_mmin", 0.50), ("perf_mmax", 0.90)):
-                st.session_state[f"{_k}_slider"] = _d
-            st.rerun()
+    # Maquette « Croisière & Coût » : accent ORANGE local (fidèle à la maquette),
+    # PAS de volet de droite — paramètres dans une barre horizontale collante ;
+    # le ruban gauche reste déroulé (cf. bloc Navigation, exclusion de la page).
+    acc_d, acc_v, RED = "#C2710A", "#FF9F0A", "#FF3B30"
+    st.markdown(_DASH_CSS + _PERF_CTRL_CSS, unsafe_allow_html=True)
 
     page_head("Vitesses de croisière optimales",
-              "MRC · LRC · ECON — portée spécifique et coût · paramètres dans le "
-              "panneau de droite →", accent=acc_v)
+              "MRC · LRC · ECON — portée spécifique et coût d'exploitation "
+              "balayés en fonction du nombre de Mach", accent=acc_v)
+
+    # ── Barre de contrôles horizontale (6 paramètres, collante) ────────────
+    with st.container(border=True, key="perf_ctrlbar"):
+        cols = st.columns(6)
+        defs = [
+            ("Masse [t]",          300.0,  575.0,   450.0,  1.0,  "perf_mass"),
+            ("Altitude [m]",         0.0, 13100.0, 10668.0, 50.0, "perf_h"),
+            ("ΔISA [°C]",          -20.0,   20.0,     0.0,  1.0,  "perf_disa"),
+            ("Cost Index [kg/min]",  0.0,  200.0,    30.0,  5.0,  "perf_ci"),
+            ("Mach min",             0.40,   0.75,    0.50, 0.01, "perf_mmin"),
+            ("Mach max",             0.78,   0.92,    0.90, 0.01, "perf_mmax"),
+        ]
+        vals = {}
+        for col, (lab, lo, hi, dflt, step, key) in zip(cols, defs):
+            with col:
+                st.markdown(f'<div class="perf-ctrl-l">{lab}</div>',
+                            unsafe_allow_html=True)
+                vals[key] = st.slider(lab, lo, hi, dflt, step, key=key,
+                                      label_visibility="collapsed")
+    mass = vals["perf_mass"] * 1000.0
+    h, disa, ci = vals["perf_h"], vals["perf_disa"], vals["perf_ci"]
+    mmin, mmax = vals["perf_mmin"], vals["perf_mmax"]
 
     if mmax <= mmin:
         st.warning("Le Mach max doit être supérieur au Mach min.")
@@ -1762,7 +1791,7 @@ def page_perf():
                 icon="⚠️")
         return
 
-    # ── Bande KPI : les 3 vitesses optimales + portée spécifique maximale ──
+    # ── Bande d'indicateurs : MRC · LRC · ECON · SR max ────────────────────
     def _kpi_speed(o, lab, tag, hl=False):
         if o is None:
             return _dash_kpi(lab, "—", "", "indéterminé", tag=tag, acc=acc_d)
@@ -1780,111 +1809,134 @@ def page_perf():
                     f"{r['sr_max']:.0f} m/kg · au point MRC", acc=acc_d)
         + '</div>', unsafe_allow_html=True)
 
+    # ── Données de courbe ──────────────────────────────────────────────────
     curve = r['curve']
     machs = np.asarray(curve['mach'])
-    sr = np.asarray(curve['sr'])
-    cost = np.asarray(curve['cost'])
-    wf = np.asarray(curve['wf'])
-    vsr = np.isfinite(sr)
+    sr    = np.asarray(curve['sr'])
+    wf    = np.asarray(curve['wf'])
+    ld    = np.asarray(curve['finesse'])
+    tas_a = np.asarray(curve['tas'])
+    wfh   = wf * 3600.0                              # kg/h
+    vsr, vwf, vld = np.isfinite(sr), np.isfinite(wf), np.isfinite(ld)
+    MMO = 0.89                                       # Mmo A380
 
-    def _opt_markers(fig, ys_key, conv):
-        """Pose les 3 marqueurs MRC/LRC/ECON (point blanc cerclé + étiquette)."""
-        for o, name in ((mrc, "MRC"), (lrc, "LRC"), (econ, "ECON")):
-            if o is None:
-                continue
-            y = conv(o)
-            fig.add_trace(go.Scatter(
-                x=[o['mach']], y=[y], mode="markers+text",
-                marker=dict(color="white", size=12, line=dict(color=acc_d, width=3)),
-                text=[name], textposition="top center",
-                textfont=dict(family=FONT_MONO, size=11, color=acc_d),
-                showlegend=False,
-                hovertemplate=f"<b>{name}</b><br>M %{{x:.3f}}<extra></extra>"))
-
-    # ── Portée spécifique SR(M) — graphe principal pleine largeur ──────────
-    with st.container(border=True):
-        st.markdown('<div class="dash-chart-head"><span class="nm">Portée '
-                    'spécifique</span><span class="dash-chart-sub">SR = TAS / '
-                    'W_F selon le Mach</span><span class="cur" '
-                    f'style="--acc:{acc_d}">max {r["sr_max"]:.0f} m/kg</span>'
-                    '</div>', unsafe_allow_html=True)
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=machs[vsr], y=sr[vsr], mode="lines",
-            line=dict(color=acc_v, width=2.6), fill="tozeroy",
-            fillcolor=_rgba(acc_v, .10), showlegend=False,
-            hovertemplate="M %{x:.3f}<br>SR %{y:.1f} m/kg<extra></extra>"))
-        _opt_markers(fig, "sr", lambda o: o['sr'])
-        fig.update_xaxes(showgrid=False, zeroline=False, color="#8B93A1")
-        fig.update_yaxes(showgrid=True, gridcolor="rgba(60,60,67,.07)",
-                         zeroline=False, color="#8B93A1")
-        fig.update_layout(height=320, template="plotly_white",
-            font=dict(family=FONT_UI), margin=dict(t=10, b=38, l=10, r=12),
-            xaxis_title="Mach", yaxis_title="SR [m/kg]",
-            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig, config=PLOTLY_CONF)
-
-    # ── Décomposition du coût : Fuel / Time / Total (diagramme Cost Index) ─
-    # Reproduit le schéma de référence du cours : coût carburant (U, min MRC),
-    # coût temps (décroissant ∝ 1/V), coût total = somme (U, min ECON).
-    tas_arr  = np.asarray(curve['tas'])
-    fuel_nm  = (wf / tas_arr) * 1852.0            # coût carburant [kg/NM]
-    time_nm  = (ci / 60.0 / tas_arr) * 1852.0     # coût temps     [kg/NM]
-    total_nm = cost * 1852.0                       # coût total     [kg/NM]
-    C_FUEL, C_TIME, C_TOTAL = "#23262B", "#E5342B", "#2F6BD8"   # noir / rouge / bleu
-    MMO = 0.89                                     # Mmo A380
-    with st.container(border=True):
-        st.markdown('<div class="dash-chart-head"><span class="nm">Coût '
-                    'd\'exploitation</span><span class="dash-chart-sub">'
-                    'carburant + temps selon la vitesse (Cost Index)</span>'
-                    f'<span class="cur" style="--acc:{acc_d}">ECON M'
-                    f'{econ["mach"]:.3f}</span></div>', unsafe_allow_html=True)
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=machs[vsr], y=total_nm[vsr], mode="lines",
-            name="Coût total", line=dict(color=C_TOTAL, width=2.8),
-            hovertemplate="M %{x:.3f}<br>Total %{y:.2f} kg/NM<extra></extra>"))
-        fig.add_trace(go.Scatter(x=machs[vsr], y=fuel_nm[vsr], mode="lines",
-            name="Carburant", line=dict(color=C_FUEL, width=2.2),
-            hovertemplate="M %{x:.3f}<br>Carburant %{y:.2f} kg/NM<extra></extra>"))
-        fig.add_trace(go.Scatter(x=machs[vsr], y=time_nm[vsr], mode="lines",
-            name="Temps", line=dict(color=C_TIME, width=2.2),
-            hovertemplate="M %{x:.3f}<br>Temps %{y:.2f} kg/NM<extra></extra>"))
-
-        def _mk(x, y, lab, col):
-            fig.add_trace(go.Scatter(x=[x], y=[y], mode="markers+text",
-                marker=dict(color="white", size=11, line=dict(color=col, width=3)),
-                text=[lab], textposition="top center",
-                textfont=dict(family=FONT_MONO, size=11, color=col),
-                showlegend=False, hovertemplate=f"<b>{lab}</b><extra></extra>"))
-        _mk(mrc['mach'], (mrc['wf'] / mrc['tas']) * 1852.0, "MRC", C_FUEL)
-        if econ is not None:
-            ye = (econ['wf'] + ci / 60.0) / econ['tas'] * 1852.0
-            _mk(econ['mach'], ye, "ECON", C_TOTAL)
-            fig.add_vline(x=econ['mach'],
-                          line=dict(color="#9AA3AF", width=1, dash="dot"))
-        if lrc is not None:
-            _mk(lrc['mach'], (lrc['wf'] + ci / 60.0) / lrc['tas'] * 1852.0,
-                "LRC", acc_d)
+    def _common(fig, ytitle):
         if mmin <= MMO <= mmax:
             fig.add_vline(x=MMO, line=dict(color="#C0C6CF", width=1, dash="dash"),
-                          annotation_text="V_MO", annotation_position="top",
+                          annotation_text="M_MO", annotation_position="top",
                           annotation_font=dict(size=10, color="#8B93A1"))
         fig.update_xaxes(showgrid=False, zeroline=False, color="#8B93A1")
         fig.update_yaxes(showgrid=True, gridcolor="rgba(60,60,67,.07)",
-                         zeroline=False, color="#8B93A1", rangemode="tozero")
-        fig.update_layout(height=480, template="plotly_white",
-            font=dict(family=FONT_UI), margin=dict(t=10, b=38, l=10, r=12),
-            xaxis_title="Mach", yaxis_title="Coût [kg/NM]",
-            legend=dict(orientation="h", yanchor="bottom", y=1.0,
-                        xanchor="right", x=1.0, bgcolor="rgba(0,0,0,0)"),
+                         zeroline=False, color="#8B93A1")
+        fig.update_layout(height=300, template="plotly_white",
+            font=dict(family=FONT_UI), margin=dict(t=12, b=40, l=10, r=14),
+            xaxis_title="Nombre de Mach", yaxis_title=ytitle,
             plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig, config=PLOTLY_CONF)
-        if ci == 0:
-            st.caption("Cost Index = 0 → coût temps nul, le coût total se réduit "
-                       "au carburant : ECON coïncide avec MRC.")
 
-    # ── Récapitulatif des trois régimes ───────────────────────────────────
-    with st.container(border=True):
-        st.markdown("**Vitesses optimales — récapitulatif**")
+    def _marks(fig, conv):
+        """3 marqueurs MRC/LRC/ECON (point blanc cerclé + étiquette)."""
+        for o, name, c in ((mrc, "MRC", acc_d), (lrc, "LRC", acc_v),
+                           (econ, "ECON", RED)):
+            if o is None:
+                continue
+            y = conv(o)
+            if y is None or not np.isfinite(y):
+                continue
+            fig.add_trace(go.Scatter(x=[o['mach']], y=[y], mode="markers+text",
+                marker=dict(color="white", size=11, line=dict(color=c, width=3)),
+                text=[name], textposition="top center",
+                textfont=dict(family=FONT_MONO, size=10, color=c),
+                showlegend=False,
+                hovertemplate=f"<b>{name}</b><br>M %{{x:.3f}}<extra></extra>"))
+
+    def _chart_head(nm, sub, cur):
+        st.markdown(f'<div class="dash-chart-head"><span class="nm">{nm}</span>'
+                    f'<span class="dash-chart-sub">{sub}</span>'
+                    f'<span class="cur" style="--acc:{acc_d}">{cur}</span></div>',
+                    unsafe_allow_html=True)
+
+    row1 = st.columns(2)
+    row2 = st.columns(2)
+
+    # ── 1. Portée spécifique SR(M) ─────────────────────────────────────────
+    with row1[0], st.container(border=True):
+        _chart_head("Portée spécifique", "SR = TAS / W_F",
+                    f"max {r['sr_max']:.0f} m/kg")
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=machs[vsr], y=sr[vsr], mode="lines",
+            line=dict(color=acc_v, width=2.6), fill="tozeroy",
+            fillcolor=_rgba(acc_v, .12), showlegend=False,
+            hovertemplate="M %{x:.3f}<br>SR %{y:.1f} m/kg<extra></extra>"))
+        _marks(fig, lambda o: o['sr'])
+        _common(fig, "SR [m/kg]")
+        fig.update_yaxes(rangemode="tozero")
+        st.plotly_chart(fig, config=PLOTLY_CONF)
+
+    # ── 2. Coût d'exploitation : carburant + temps (Cost Index) ────────────
+    fuel_nm  = (wf / tas_a) * 1852.0                 # coût carburant [kg/NM]
+    time_nm  = (ci / 60.0 / tas_a) * 1852.0          # coût temps     [kg/NM]
+    total_nm = np.asarray(curve['cost']) * 1852.0    # coût total     [kg/NM]
+    C_FUEL = "#3A3A3C"                                # carburant (encre)
+    with row1[1], st.container(border=True):
+        _chart_head("Coût d'exploitation", "carburant + temps",
+                    f"ECON M{econ['mach']:.3f}" if econ else "—")
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=machs[vsr], y=total_nm[vsr], mode="lines",
+            name="Coût total", line=dict(color=acc_v, width=2.8),
+            hovertemplate="M %{x:.3f}<br>Total %{y:.2f} kg/NM<extra></extra>"))
+        fig.add_trace(go.Scatter(x=machs[vsr], y=fuel_nm[vsr], mode="lines",
+            name="Carburant", line=dict(color=C_FUEL, width=2.0),
+            hovertemplate="M %{x:.3f}<br>Carburant %{y:.2f} kg/NM<extra></extra>"))
+        fig.add_trace(go.Scatter(x=machs[vsr], y=time_nm[vsr], mode="lines",
+            name="Temps", line=dict(color=RED, width=2.0),
+            hovertemplate="M %{x:.3f}<br>Temps %{y:.2f} kg/NM<extra></extra>"))
+        if econ is not None:
+            ye = (econ['wf'] + ci / 60.0) / econ['tas'] * 1852.0
+            fig.add_trace(go.Scatter(x=[econ['mach']], y=[ye], mode="markers+text",
+                marker=dict(color="white", size=11, line=dict(color=RED, width=3)),
+                text=["ECON"], textposition="top center",
+                textfont=dict(family=FONT_MONO, size=10, color=RED),
+                showlegend=False, hovertemplate="<b>ECON</b><extra></extra>"))
+            fig.add_vline(x=econ['mach'],
+                          line=dict(color="#9AA3AF", width=1, dash="dot"))
+        _common(fig, "Coût [kg/NM]")
+        fig.update_yaxes(rangemode="tozero")
+        fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.0,
+            xanchor="right", x=1.0, bgcolor="rgba(0,0,0,0)"))
+        st.plotly_chart(fig, config=PLOTLY_CONF)
+
+    # ── 3. Finesse L/D(M) ──────────────────────────────────────────────────
+    with row2[0], st.container(border=True):
+        ld_max = float(np.nanmax(ld)) if np.any(vld) else float("nan")
+        _chart_head("Finesse", "L/D = f(Mach)",
+                    f"max {ld_max:.1f}" if np.isfinite(ld_max) else "—")
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=machs[vld], y=ld[vld], mode="lines",
+            line=dict(color=acc_v, width=2.6), showlegend=False,
+            hovertemplate="M %{x:.3f}<br>L/D %{y:.2f}<extra></extra>"))
+        _marks(fig, lambda o: o['finesse'])
+        _common(fig, "Finesse  L/D")
+        st.plotly_chart(fig, config=PLOTLY_CONF)
+
+    # ── 4. Débit carburant W_F(M) ──────────────────────────────────────────
+    with row2[1], st.container(border=True):
+        _chart_head("Débit carburant", "W_F = f(Mach)",
+                    f"{econ['wf_kgh']:.0f} kg/h @ ECON" if econ else "—")
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=machs[vwf], y=wfh[vwf], mode="lines",
+            line=dict(color=acc_v, width=2.6), fill="tozeroy",
+            fillcolor=_rgba(acc_v, .12), showlegend=False,
+            hovertemplate="M %{x:.3f}<br>W_F %{y:.0f} kg/h<extra></extra>"))
+        _marks(fig, lambda o: o['wf_kgh'])
+        _common(fig, "W_F [kg/h]")
+        st.plotly_chart(fig, config=PLOTLY_CONF)
+
+    if ci == 0:
+        st.caption("Cost Index = 0 → coût temps nul ; le coût total se réduit au "
+                   "carburant, donc ECON coïncide avec MRC.")
+
+    # ── Récapitulatif & modèle (volet dépliable, ouvert par défaut) ────────
+    with st.expander("Vitesses optimales — récapitulatif & modèle", expanded=True):
         lignes = []
         for cle, o in (("MRC", mrc), ("LRC", lrc), ("ECON", econ)):
             if o is None:
@@ -1901,10 +1953,23 @@ def page_perf():
                 "L/D":          round(o['finesse'], 2),
             })
         st.dataframe(pd.DataFrame(lignes), hide_index=True, width="stretch")
-        cap = ("MRC = portée spécifique maximale · LRC = 0.99·SR_max côté rapide "
-               "· ECON = coût minimal (carburant + temps)")
+        st.markdown(
+            '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:.5rem 0 .2rem">'
+            + "".join(
+                f'<span style="font-family:{FONT_MONO};font-size:12px;'
+                'color:#6E6E73;background:rgba(120,120,128,.08);padding:5px 10px;'
+                f'border-radius:8px">{t}</span>'
+                for t in ("S_wb = 859 m²", "c̄_w = 11 m", "x_cg = 0.40 MAC",
+                          "φ_T = 2°", "M_MO = 0.89"))
+            + '</div>', unsafe_allow_html=True)
+        cap = ("SR = TAS ⁄ W_F (portée par kg de carburant). **MRC** maximise la "
+               "portée spécifique ; **LRC** est la vitesse plus rapide donnant "
+               "encore 99 % de la SR maximale ; **ECON** minimise le coût total "
+               "= carburant + temps, le poids du temps étant fixé par le Cost "
+               "Index — coût/NM = (W_F + 60·CI) ⁄ TAS. Aéro near-field (OpenVSP) "
+               "+ extrapolation spline au-delà de M0.7, équilibrage Ghazi & Botez.")
         if ci == 0:
-            cap += " — Cost Index = 0, donc ECON coïncide avec MRC."
+            cap += " Cost Index = 0 → ECON coïncide avec MRC."
         st.caption(cap)
 
 
@@ -2111,8 +2176,10 @@ st.sidebar.markdown(
     '<div class="fm"><span class="pip"></span>ÉTS · É2026</div></div>',
     unsafe_allow_html=True)
 
-# Réduit le ruban gauche dans un module ; reste déroulé à l'Accueil
-if choix_page != "Accueil":
+# Réduit le ruban gauche dans un module ; reste déroulé à l'Accueil et sur la
+# page Performance croisière (maquette « Croisière & Coût » : pas de volet droit,
+# contrôles en barre horizontale → le ruban gauche se déroule en grand).
+if choix_page not in ("Accueil", "Performance croisière"):
     st.markdown(_RAIL_CSS, unsafe_allow_html=True)
 
 PAGES[choix_page]()

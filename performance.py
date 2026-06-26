@@ -162,16 +162,20 @@ def cruise_speeds(mass, altitude, delta_isa=0.0, cost_index=0.0,
     tas   = machs * a
     sr    = np.full(n_pts, np.nan)
     wf    = np.full(n_pts, np.nan)
+    ld    = np.full(n_pts, np.nan)        # finesse L/D (dispo même si limité poussée)
     for i, M in enumerate(machs):
         res = _safe_trim(mass, float(M), altitude, delta_isa, model, **trim_kw)
-        w = res['WF_total'] if res else None
-        if w:
-            wf[i] = w
-            sr[i] = tas[i] / w
+        if res:
+            ld[i] = res.get('finesse', np.nan)
+            w = res['WF_total']
+            if w:
+                wf[i] = w
+                sr[i] = tas[i] / w
     cost = np.array([_cost_per_distance(sr[i], wf[i], tas[i], cost_index)
                      for i in range(n_pts)])
 
-    curve = {'mach': machs, 'tas': tas, 'wf': wf, 'sr': sr, 'cost': cost}
+    curve = {'mach': machs, 'tas': tas, 'wf': wf, 'sr': sr, 'cost': cost,
+             'finesse': ld}
 
     if not np.any(np.isfinite(sr)):
         # Aucun point exploitable (tout limité en poussée).

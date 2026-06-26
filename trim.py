@@ -184,13 +184,27 @@ def n1_from_thrust(fn_engine, mach, altitude, delta_isa=0.0):
     """
     Inverse le modèle de poussée : trouve le régime N1 [%] qui produit la
     poussée `fn_engine` (par moteur) au Mach et à l'altitude donnés.
+
+    Inversion sur la poussée CORRIGÉE. La cible est multipliée par δ = P/P0 :
+        _thrust_N(N1) = fn_engine · δ
+      ⇔ f̄_th(N1_cor, M) · δ · F_N^max = fn_engine · δ
+      ⇔ f̄_th(N1_cor, M) · F_N^max = fn_engine
+    → le δ se simplifie : on inverse le polynôme de poussée corrigée
+    (plafond ≈ 294 kN) au lieu de la poussée réelle déclassée en altitude
+    (~59 kN à FL330). Cela reproduit la correction de référence (N1 ≈ 80 % au
+    point 500 t / M0.80 / FL330, F_N ≈ 507 kN) et, contrairement à l'ancien
+    facteur ⁄4 figé, dépend de l'altitude via δ (graduation correcte dans toute
+    l'enveloppe ; à FL330, δ ≈ 0.235 ≈ ¼, d'où l'équivalence numérique au point
+    vitrine). N.B. get_fuel_flow conserve, lui, son lapse δ√θ.
     """
-    f = lambda n: _thrust_N(n, mach, altitude, delta_isa) - fn_engine/4
+    delta = float(mod_atm.delta(altitude, delta_isa))
+    target = fn_engine * delta
+    f = lambda n: _thrust_N(n, mach, altitude, delta_isa) - target
     fmin, fmax = f(N1_MIN), f(N1_MAX)
     if fmin * fmax > 0:
         fn_max = _thrust_N(N1_MAX, mach, altitude, delta_isa)
         raise ValueError(
-            f"Poussée requise {fn_engine:.0f} N/moteur hors d'atteinte "
+            f"Poussée corrigée requise {target:.0f} N/moteur hors d'atteinte "
             f"(max ≈ {fn_max:.0f} N à N1={N1_MAX:.0f} %).")
     return brentq(f, N1_MIN, N1_MAX, xtol=1e-4)
 
