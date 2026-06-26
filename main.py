@@ -18,6 +18,7 @@ import conversion    as mod_conv
 import aerodynamics  as mod_aero
 import propulsion    as mod_prop
 import trim          as mod_trim
+import performance   as mod_perf
 
 # ---------------------------------------------------------------------------
 # Registre des modules — chaque entrée porte son module et son statut
@@ -29,6 +30,7 @@ MODULES = [
     {"id": 3, "cle": "aero", "module": mod_aero,  "dispo": True},
     {"id": 4, "cle": "prop", "module": mod_prop,  "dispo": True},
     {"id": 5, "cle": "trim", "module": mod_trim,  "dispo": True},
+    {"id": 6, "cle": "perf", "module": mod_perf,  "dispo": True},
 ]
 
 
@@ -876,6 +878,125 @@ def loop_trim():
             pass
 
 
+# ============================== MODULE PERFORMANCE (PERF) =====================
+
+def print_perf_menu():
+    print()
+    print("─" * 64)
+    print(f"  {mod_perf.NOM}")
+    print("─" * 64)
+    print("  Vitesses de croisière optimales à masse et altitude fixées :")
+    print("    MRC  — portée spécifique maximale (SR = TAS / W_F)")
+    print("    LRC  — vitesse rapide à SR = 0.99·SR_max (convention industrielle)")
+    print("    ECON — coût minimal carburant + temps (via Cost Index)")
+    print()
+    print("  cruise --mass <kg> --h <alt> [--disa <v>] [--ci <kg/min>]")
+    print("         [--mmin <M>] [--mmax <M>] [--n <pts>]")
+    print("         Balaye le Mach (trim à chaque pas) et extrait MRC, LRC, ECON")
+    print("         --ci    : Cost Index pour ECON [kg/min] (défaut 0 → ECON ≡ MRC)")
+    print("         --mmin  : Mach min du balayage (défaut 0.50)")
+    print("         --mmax  : Mach max du balayage (défaut 0.90)")
+    print("         --n     : nombre de points d'échantillonnage (défaut 41)")
+    print()
+    print("  Exemple :  cruise --mass 450000 --h 10668 --ci 30")
+    print()
+    print("  help   Afficher cette aide")
+    print("  back   Retour au menu principal")
+    print("─" * 64)
+    print()
+
+
+def _build_perf_parser():
+    parser = _SilentParser(prog="")
+    sub    = parser.add_subparsers(dest="cmd")
+    sub.required = True
+
+    p = sub.add_parser("cruise")
+    p.add_argument("--mass", type=float, required=True, metavar="MASSE")
+    p.add_argument("--h",    type=float, required=True, metavar="ALTITUDE")
+    p.add_argument("--disa", type=float, default=0.0,   metavar="ΔISA")
+    p.add_argument("--ci",   type=float, default=0.0,   metavar="KG/MIN")
+    p.add_argument("--mmin", type=float, default=mod_perf.MACH_MIN_DEFAUT, metavar="MACH")
+    p.add_argument("--mmax", type=float, default=mod_perf.MACH_MAX_DEFAUT, metavar="MACH")
+    p.add_argument("--n",    type=int,   default=mod_perf.N_PTS_DEFAUT,    metavar="PTS")
+    return parser
+
+
+def _print_perf_result(r, args):
+    """Affiche les vitesses de croisière optimales MRC / LRC / ECON."""
+    print()
+    print("=" * 64)
+    print(f"  Vitesses de croisière optimales  |  m = {args.mass/1000:.1f} t   "
+          f"h = {args.h:.0f} m")
+    print(f"  ΔISA = {args.disa:+.1f} °C   Cost Index = {args.ci:.0f} kg/min   "
+          f"balayage M{args.mmin:.2f}→{args.mmax:.2f} ({args.n} pts)")
+    print("─" * 64)
+    if r['MRC'] is None:
+        print("  Aucun point exploitable : l'avion est limité en poussée sur tout")
+        print("  l'intervalle de Mach demandé (W_F non défini).")
+        print("=" * 64)
+        print()
+        return
+    print(f"  Portée spécifique maximale (SR_max) = {r['sr_max']:.1f} m/kg "
+          f"({r['sr_max']/1852.0:.4f} NM/kg)")
+    print("─" * 64)
+    print(f"  {'':<6}{'Mach':>8}{'TAS[kt]':>10}{'SR[m/kg]':>11}"
+          f"{'SR[NM/kg]':>11}{'W_F[kg/s]':>11}{'L/D':>8}")
+    print("  " + "─" * 62)
+    for cle in ("MRC", "LRC", "ECON"):
+        o = r[cle]
+        if o is None:
+            print(f"  {cle:<6}{'—':>8}")
+            continue
+        print(f"  {cle:<6}{o['mach']:>8.4f}{o['tas_kt']:>10.1f}{o['sr']:>11.1f}"
+              f"{o['sr_nm_per_kg']:>11.4f}{o['wf']:>11.4f}{o['finesse']:>8.2f}")
+    print("=" * 64)
+    if args.ci == 0:
+        print("  Note : Cost Index = 0 → ECON coïncide avec MRC (coût = carburant seul).")
+    print()
+
+
+def loop_perf():
+    """Boucle interactive du module de performance de croisière."""
+    print_perf_menu()
+    parser = _build_perf_parser()
+    _model = [None]   # modèle aéro conservé entre les commandes
+
+    while True:
+        try:
+            ligne = input("  PERF> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+
+        if not ligne:
+            continue
+        if ligne.lower() in ("back", "menu", "b"):
+            break
+        if ligne.lower() in ("help", "aide", "?"):
+            print_perf_menu()
+            continue
+
+        try:
+            args = parser.parse_args(shlex.split(ligne))
+
+            # args.cmd == "cruise"
+            if _model[0] is None:
+                print("  Chargement du modèle aérodynamique ...")
+                _model[0] = mod_aero.build_aero_model()
+            print("  Balayage du Mach en cours ...")
+            r = mod_perf.cruise_speeds(
+                args.mass, args.h, delta_isa=args.disa, cost_index=args.ci,
+                mach_min=args.mmin, mach_max=args.mmax, n_pts=args.n,
+                model=_model[0])
+            _print_perf_result(r, args)
+
+        except (ValueError, FileNotFoundError) as e:
+            print(f"  Erreur : {e}\n")
+        except SystemExit:
+            pass
+
+
 # ============================== MODULES EN DÉVELOPPEMENT ======================
 
 def loop_dev(module):
@@ -896,6 +1017,7 @@ _LOOPS = {
     "aero": loop_aero,
     "prop": loop_prop,
     "trim": loop_trim,
+    "perf": loop_perf,
 }
 
 
