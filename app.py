@@ -538,6 +538,38 @@ a.mod-card:hover { transform: translateY(-3px);
 
 
 def page_accueil():
+    # ── Conditions de vol : ruban de droite déroulable, MASQUÉ par défaut ─────
+    st.session_state.setdefault("home_cond_open", False)
+    if st.session_state["home_cond_open"]:
+        st.markdown(_RP_CSS + _HOME_COND_CSS, unsafe_allow_html=True)
+        with st.container(border=True, key="rp_panel"):
+            st.markdown('<div class="rp-head">Conditions de vol</div>'
+                        '<div class="rp-sub">Valeurs par défaut communes à tous '
+                        'les modules</div>', unsafe_allow_html=True)
+            if st.button("✕  Masquer le menu", key="cond_hide", width="stretch"):
+                st.session_state["home_cond_open"] = False
+                st.rerun()
+            for gkey, lab, u, lo, hi, step, dflt, fmt, _t in CONDITIONS:
+                _rp_ctrl(lab, lo, hi, dflt, step, gkey, u, fmt)
+            pr = mod_atm.atmosphere(float(st.session_state["g_h_slider"]),
+                                    float(st.session_state["g_disa_slider"]))
+            st.markdown(_cond_derived_html(pr), unsafe_allow_html=True)
+            if st.button("Appliquer à tous les modules", type="primary",
+                         width="stretch"):
+                apply_conditions()
+                st.toast("Conditions appliquées à tous les modules.", icon="✅")
+            if st.button("Réinitialiser les conditions", width="stretch"):
+                for c in CONDITIONS:
+                    st.session_state[f"{c[0]}_slider"] = c[6]
+                st.rerun()
+    else:
+        # Pastille flottante haut-droite : déroule le menu (contenu pleine largeur)
+        st.markdown(_COND_TAB_CSS, unsafe_allow_html=True)
+        with st.container(key="cond_tab"):
+            if st.button("⚙  Conditions de vol", key="cond_show"):
+                st.session_state["home_cond_open"] = True
+                st.rerun()
+
     if HERO_VIDEO.exists():
         b64 = _video_b64(str(HERO_VIDEO), HERO_VIDEO.stat().st_mtime)
         st.iframe(_HERO_HTML.format(b64=b64), height=348)
@@ -1285,6 +1317,124 @@ def _rp_ctrl(label, lo, hi, default, step, key, unit="", fmt="{:.0f}"):
     return float(st.session_state[f"{key}_slider"])
 
 
+# ---------------------------------------------------------------------------
+# Conditions de vol globales (ruban de droite de l'Accueil)
+# ---------------------------------------------------------------------------
+# Réglages communs à TOUS les modules : altitude, ΔISA (→ T, P, ρ, a en dérivé
+# ISA) et paramètres de vol partagés (Mach, masse, centrage). Ils servent de
+# valeurs par défaut au démarrage (seed) et peuvent être re-poussés partout via
+# « Appliquer à tous les modules ».
+# Chaque condition liste les contrôles de module qu'elle alimente, sous forme
+# (clé d'état, borne_min, borne_max) → la valeur est clampée à la plage du module.
+# NB : les contrôles _rp_ctrl stockent dans "<clé>_slider" ; la page Performance
+# croisière utilise st.slider(key=...) → l'état est la clé nue. Plage None/None
+# = plage dynamique (Mach aéro, lue sur le modèle VSPAERO).
+CONDITIONS = [
+    # (clé globale, label, unité, lo, hi, pas, défaut, fmt, cibles)
+    ("g_h", "Altitude", "m", 0.0, 20000.0, 50.0, 10000.0, "{:.0f}", [
+        ("atm_h_slider", 0.0, 20000.0), ("conv_h_slider", 0.0, 13100.0),
+        ("prop_h_slider", 0.0, 13000.0), ("trim_h_slider", 0.0, 13000.0),
+        ("perf_h", 0.0, 13100.0)]),
+    ("g_disa", "ΔISA", "°C", -30.0, 30.0, 1.0, 0.0, "{:+.0f}", [
+        ("atm_disa_slider", -30.0, 30.0), ("conv_disa_slider", -30.0, 30.0),
+        ("prop_disa_slider", -25.0, 35.0), ("trim_disa_slider", -20.0, 20.0),
+        ("perf_disa", -20.0, 20.0)]),
+    ("g_mach", "Mach", "", 0.20, 0.92, 0.01, 0.80, "{:.2f}", [
+        ("conv_mach_slider", 0.20, 0.92), ("aero_mach_slider", None, None),
+        ("prop_mach_slider", 0.0, 0.89), ("trim_mach_slider", 0.50, 0.89)]),
+    ("g_mass", "Masse", "t", 300.0, 575.0, 1.0, 500.0, "{:.0f}", [
+        ("trim_mass_slider", 300.0, 575.0), ("perf_mass", 300.0, 575.0)]),
+    ("g_xcg", "Centrage x_cg", "MAC", 0.20, 0.45, 0.005, 0.40, "{:.3f}", [
+        ("trim_xcg_slider", 0.20, 0.45)]),
+]
+
+
+def _clamp(v, lo, hi):
+    return min(hi, max(lo, v))
+
+
+def _aero_mach_range():
+    """Plage de Mach du modèle aéro (grille VSPAERO) — cache_resource, gratuit."""
+    g = load_aero_model()['f_clwb']
+    return float(g['y_mach'][0]), float(g['y_mach'][-1])
+
+
+def seed_conditions():
+    """Amorce les conditions globales et les contrôles de module (setdefault :
+    n'écrase JAMAIS une valeur déjà réglée). Appelé au démarrage, avant les pages
+    → tous les modules démarrent sur les conditions par défaut."""
+    for gkey, _lab, _u, _lo, _hi, _step, dflt, _fmt, targets in CONDITIONS:
+        st.session_state.setdefault(f"{gkey}_slider", dflt)
+        gval = float(st.session_state[f"{gkey}_slider"])
+        for skey, tlo, thi in targets:
+            if tlo is None:                      # plage dynamique (Mach aéro)
+                tlo, thi = _aero_mach_range()
+            st.session_state.setdefault(skey, _clamp(gval, tlo, thi))
+
+
+def apply_conditions():
+    """Pousse les conditions globales vers TOUS les modules (écrase les réglages
+    locaux, clampé à la plage de chaque module)."""
+    for gkey, _lab, _u, _lo, _hi, _step, _dflt, _fmt, targets in CONDITIONS:
+        gval = float(st.session_state[f"{gkey}_slider"])
+        for skey, tlo, thi in targets:
+            if tlo is None:
+                tlo, thi = _aero_mach_range()
+            st.session_state[skey] = _clamp(gval, tlo, thi)
+
+
+def _cond_derived_html(pr):
+    """Bloc « atmosphère ISA dérivée » (T, P, ρ, a, θ, δ, σ) du ruban Accueil."""
+    cells = [
+        ("T", f"{pr['T']:.1f} K"), ("P", f"{pr['P'] / 100:.0f} hPa"),
+        ("ρ", f"{pr['rho']:.4f}"), ("a", f"{pr['a']:.1f} m/s"),
+        ("θ", f"{pr['theta']:.4f}"), ("δ", f"{pr['delta']:.4f}"),
+        ("σ", f"{pr['sigma']:.4f}"),
+    ]
+    inner = "".join(f'<div class="cond-cell"><span class="k">{k}</span>'
+                    f'<span class="v">{v}</span></div>' for k, v in cells)
+    return ('<div class="cond-derived"><div class="ct">Atmosphère ISA dérivée'
+            '</div><div class="cond-grid">' + inner + '</div></div>')
+
+
+_HOME_COND_CSS = """
+<style>
+.cond-derived { margin-top: 16px; padding-top: 13px;
+    border-top: 1px solid rgba(60,60,67,.12); }
+.cond-derived .ct { font-size: 10.5px; font-weight: 700; letter-spacing: .14em;
+    text-transform: uppercase; color: #8B93A1; margin-bottom: 9px; }
+.cond-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 10px; }
+.cond-cell { display: flex; flex-direction: column; }
+.cond-cell .k { font-size: 11px; color: #8B93A1; }
+.cond-cell .v { font-size: 14px; font-weight: 600; color: #1A2230;
+    font-family: ui-monospace, "SF Mono", monospace; }
+</style>
+"""
+
+
+# Déclencheur flottant (pastille verre dépoli, haut-droite) pour dérouler le
+# ruban « Conditions de vol » — le panneau est masqué par défaut.
+_COND_TAB_CSS = """
+<style>
+.st-key-cond_tab { position: fixed; top: 3.6rem; right: 1.2rem; z-index: 80;
+    width: auto !important; }
+.st-key-cond_tab [data-testid="stButton"], .st-key-cond_tab .stButton {
+    width: auto !important; }
+.st-key-cond_tab button {
+    border-radius: 999px !important;
+    background: rgba(255,255,255,.85) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(60,60,67,.14) !important;
+    color: #1A2230 !important; font-weight: 600 !important;
+    font-size: 13px !important; padding: .34rem .95rem !important;
+    box-shadow: 0 6px 20px -8px rgba(16,24,40,.35) !important; }
+.st-key-cond_tab button:hover { border-color: rgba(60,60,67,.32) !important;
+    background: rgba(255,255,255,.95) !important; }
+</style>
+"""
+
+
 def page_prop():
     acc_d, acc_v = ACCENTS["Propulsion & Émissions"]
     st.markdown(_DASH_CSS + _RP_CSS, unsafe_allow_html=True)
@@ -1827,13 +1977,16 @@ def page_perf():
         vals = {}
         for col, (lab, unit, lo, hi, dflt, step, key, dec) in zip(cols, defs):
             with col:
-                cur = float(st.session_state.get(key, dflt))   # valeur courante
+                # défaut (éventuellement pré-seedé par les conditions globales) ;
+                # pas de value= au slider → aucun warning « default + Session State »
+                st.session_state.setdefault(key, dflt)
+                cur = float(st.session_state[key])             # valeur courante
                 u = f'<span class="u">{unit}</span>' if unit else ""
                 st.markdown('<div class="perf-ctrl-head">'
                             f'<span class="perf-ctrl-l">{lab}</span>'
                             f'<span class="perf-ctrl-v">{_fv(cur, dec)}{u}</span>'
                             '</div>', unsafe_allow_html=True)
-                vals[key] = st.slider(lab, lo, hi, dflt, step, key=key,
+                vals[key] = st.slider(lab, lo, hi, step=step, key=key,
                                       label_visibility="collapsed")
     mass = vals["perf_mass"] * 1000.0
     h, disa, ci = vals["perf_h"], vals["perf_disa"], vals["perf_ci"]
@@ -2253,6 +2406,10 @@ if "page" in st.query_params:
 
 apply_page_background()
 apply_sidebar_background()
+
+# Amorce les conditions de vol globales + les défauts de chaque module (setdefault
+# → n'écrase pas les réglages en cours). Doit précéder le rendu des pages.
+seed_conditions()
 
 # Marque + label « Module » (en haut du volet)
 st.sidebar.markdown(
