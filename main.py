@@ -19,6 +19,7 @@ import aerodynamics  as mod_aero
 import propulsion    as mod_prop
 import trim          as mod_trim
 import performance   as mod_perf
+import trajectory    as mod_traj
 
 # ---------------------------------------------------------------------------
 # Registre des modules — chaque entrée porte son module et son statut
@@ -31,6 +32,7 @@ MODULES = [
     {"id": 4, "cle": "prop", "module": mod_prop,  "dispo": True},
     {"id": 5, "cle": "trim", "module": mod_trim,  "dispo": True},
     {"id": 6, "cle": "perf", "module": mod_perf,  "dispo": True},
+    {"id": 7, "cle": "traj", "module": mod_traj,  "dispo": True},
 ]
 
 
@@ -997,6 +999,129 @@ def loop_perf():
             pass
 
 
+# ============================ MODULE TRAJECTOIRE =============================
+
+def print_traj_menu():
+    print()
+    print("─" * 64)
+    print(f"  {mod_traj.NOM}")
+    print("─" * 64)
+    print("  Profil VERTICAL de croisière : à chaque pas de distance, l'avion est")
+    print("  équilibré (trim) ; on intègre le temps, le carburant brûlé (la masse")
+    print("  décroît) et les émissions OACI. Step-climbs INSTANTANÉS (saut d'alt.).")
+    print()
+    print("  compare --mass <kg> --dist <km> --mach <M> --base <ft>")
+    print("          [--step <ft>] [--disa <v>] [--xcg <f>] [--ds <km>]")
+    print("          Compare la MÊME trajectoire sans / avec 1 / avec 2 step-climbs")
+    print("          --base  : altitude du 1ᵉʳ palier [ft]")
+    print("          --step  : amplitude d'un step-climb [ft] (défaut 2000)")
+    print("          --dist  : distance de croisière [km]")
+    print("          --ds    : pas d'intégration [km] (défaut 25 NM ≈ 46 km)")
+    print()
+    print("  Exemple :  compare --mass 500000 --dist 12000 --mach 0.82 --base 31000")
+    print()
+    print("  help   Afficher cette aide")
+    print("  back   Retour au menu principal")
+    print("─" * 64)
+    print()
+
+
+def _build_traj_parser():
+    parser = _SilentParser(prog="")
+    sub    = parser.add_subparsers(dest="cmd")
+    sub.required = True
+
+    p = sub.add_parser("compare")
+    p.add_argument("--mass", type=float, required=True, metavar="MASSE")
+    p.add_argument("--dist", type=float, required=True, metavar="KM")
+    p.add_argument("--mach", type=float, required=True, metavar="MACH")
+    p.add_argument("--base", type=float, required=True, metavar="FT")
+    p.add_argument("--step", type=float, default=mod_traj.STEP_CLIMB_FT, metavar="FT")
+    p.add_argument("--disa", type=float, default=0.0,  metavar="ΔISA")
+    p.add_argument("--xcg",  type=float, default=0.40, metavar="FRAC")
+    p.add_argument("--ds",   type=float, default=mod_traj.SUBSTEP_DEFAUT / 1000.0,
+                   metavar="KM")
+    return parser
+
+
+def _print_traj_result(cas, args):
+    """Affiche la comparaison 0 / 1 / 2 step-climbs (temps, carburant, émissions)."""
+    print()
+    print("=" * 70)
+    print(f"  Trajectoire de croisière  |  m₀ = {args.mass/1000:.1f} t   "
+          f"dist = {args.dist:.0f} km   M{args.mach:.3f}")
+    print(f"  Palier de base FL{int(round(args.base/100)):03d}   "
+          f"step-climb = {args.step:.0f} ft   ΔISA = {args.disa:+.1f} °C   "
+          f"CG = {args.xcg*100:.0f} %")
+    print("─" * 70)
+    print(f"  {'Cas':<14}{'Paliers':<22}{'Temps[h]':>9}{'Carb[t]':>9}"
+          f"{'CO2[t]':>8}{'NOx[kg]':>9}")
+    print("  " + "─" * 68)
+    ref_fuel = cas[0]['fuel'] if cas[0]['feasible'] else None
+    for k in (0, 1, 2):
+        c = cas[k]
+        nom = {0: "direct", 1: "1 step-climb", 2: "2 step-climbs"}[k]
+        paliers = " → ".join(f"FL{int(round(a/mod_traj.FT/100)):03d}"
+                             for a in c['levels'])
+        if not c['feasible']:
+            print(f"  {nom:<14}{paliers:<22}{'infaisable (limité en poussée)':>36}")
+            continue
+        e = c['emissions']
+        print(f"  {nom:<14}{paliers:<22}{c['time']/3600:>9.2f}"
+              f"{c['fuel']/1000:>9.1f}{e['CO2']/1000:>8.1f}{e['NOx']:>9.0f}")
+    print("─" * 70)
+    if ref_fuel:
+        for k in (1, 2):
+            if cas[k]['feasible']:
+                dg = ref_fuel - cas[k]['fuel']
+                print(f"  Gain carburant {k} step-climb(s) vs direct : "
+                      f"{dg/1000:+.2f} t  ({dg/ref_fuel*100:+.2f} %)")
+    print("=" * 70)
+    print("  Hypothèses : vent nul, profil vertical seul, step-climbs instantanés.")
+    print()
+
+
+def loop_traj():
+    """Boucle interactive du module de trajectoire de croisière."""
+    print_traj_menu()
+    parser = _build_traj_parser()
+    _model = [None]   # modèle aéro conservé entre les commandes
+
+    while True:
+        try:
+            ligne = input("  TRAJ> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+
+        if not ligne:
+            continue
+        if ligne.lower() in ("back", "menu", "b"):
+            break
+        if ligne.lower() in ("help", "aide", "?"):
+            print_traj_menu()
+            continue
+
+        try:
+            args = parser.parse_args(shlex.split(ligne))
+
+            # args.cmd == "compare"
+            if _model[0] is None:
+                print("  Chargement du modèle aérodynamique ...")
+                _model[0] = mod_aero.build_aero_model()
+            print("  Intégration des trajectoires en cours ...")
+            cas = mod_traj.compare_step_climbs(
+                args.mass, args.dist * 1000.0, args.mach, args.base * mod_traj.FT,
+                step_ft=args.step, delta_isa=args.disa, x_cg=args.xcg,
+                model=_model[0], ds=args.ds * 1000.0)
+            _print_traj_result(cas, args)
+
+        except (ValueError, FileNotFoundError) as e:
+            print(f"  Erreur : {e}\n")
+        except SystemExit:
+            pass
+
+
 # ============================== MODULES EN DÉVELOPPEMENT ======================
 
 def loop_dev(module):
@@ -1018,6 +1143,7 @@ _LOOPS = {
     "prop": loop_prop,
     "trim": loop_trim,
     "perf": loop_perf,
+    "traj": loop_traj,
 }
 
 
@@ -1041,7 +1167,7 @@ def main_loop():
             print_main_menu()
             continue
 
-        # Résolution de la clé par numéro (1–5) ou par nom abrégé (atm, conv…)
+        # Résolution de la clé par numéro (1–7) ou par nom abrégé (atm, conv…)
         cle = None
         for m in MODULES:
             if choix == str(m["id"]) or choix == m["cle"]:
@@ -1049,7 +1175,7 @@ def main_loop():
                 break
 
         if cle is None:
-            print(f"  Module '{choix}' inconnu. Tapez un numéro (1–5) ou une clé.\n")
+            print(f"  Module '{choix}' inconnu. Tapez un numéro (1–7) ou une clé.\n")
             continue
 
         # Lancement de la boucle du module sélectionné

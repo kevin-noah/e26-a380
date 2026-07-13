@@ -25,6 +25,7 @@ import aerodynamics as mod_aero
 import propulsion as mod_prop
 import trim as mod_trim
 import performance as mod_perf
+import trajectory as mod_traj
 
 KT = 0.514444   # 1 kt en m/s
 FT = 0.3048     # 1 ft en m
@@ -41,6 +42,7 @@ ACCENTS = {
     "Propulsion & Émissions": ("#C25E00", "#FF9F0A"),
     "Équilibrage (Trim)":     ("#6E6E73", "#8E8E93"),
     "Performance croisière":  ("#54606E", "#8794A4"),
+    "Trajectoire":            ("#0C7C77", "#2CC7C0"),
 }
 # Courbes multi-séries (Mach) — couleurs système Apple
 APPLE_SEQ = ["#0A84FF", "#30D158", "#FF9F0A", "#BF5AF2", "#FF375F", "#64D2FF"]
@@ -377,6 +379,17 @@ def perf_cruise(mass, altitude, delta_isa, cost_index, mach_min, mach_max,
         mach_min=mach_min, mach_max=mach_max, n_pts=n_pts, model=model)
 
 
+@st.cache_data(show_spinner=False)
+def traj_compare(mass, dist_m, mach, base_m, step_ft, delta_isa, sig,
+                 ds=mod_traj.SUBSTEP_DEFAUT):
+    """Compare 0 / 1 / 2 step-climbs pour une même trajectoire (sig invalide le
+    cache aéro). Renvoie le dict {0,1,2} de mod_traj.compare_step_climbs."""
+    model = load_aero_model()
+    return mod_traj.compare_step_climbs(
+        mass, dist_m, mach, base_m, step_ft=step_ft, delta_isa=delta_isa,
+        model=model, ds=ds)
+
+
 # ---------------------------------------------------------------------------
 # Pages
 # ---------------------------------------------------------------------------
@@ -595,6 +608,9 @@ def page_accueil():
         ("06", "Performance croisière", True,
          "Vitesses de croisière optimales MRC / LRC / ECON : portée spécifique "
          "et coût d'exploitation (Cost Index) selon le nombre de Mach."),
+        ("07", "Trajectoire", True,
+         "Profil vertical de croisière avec step-climbs : temps de vol, "
+         "consommation de carburant et émissions, comparés sans / 1 / 2 montées."),
     ]
     cards = ""
     for num, nom, dispo, desc in modules:
@@ -1338,12 +1354,14 @@ CONDITIONS = [
     ("g_disa", "ΔISA", "°C", -30.0, 30.0, 1.0, 0.0, "{:+.0f}", [
         ("atm_disa_slider", -30.0, 30.0), ("conv_disa_slider", -30.0, 30.0),
         ("prop_disa_slider", -25.0, 35.0), ("trim_disa_slider", -20.0, 20.0),
-        ("perf_disa", -20.0, 20.0)]),
+        ("perf_disa", -20.0, 20.0), ("traj_disa", -20.0, 20.0)]),
     ("g_mach", "Mach", "", 0.20, 0.92, 0.01, 0.80, "{:.2f}", [
         ("conv_mach_slider", 0.20, 0.92), ("aero_mach_slider", None, None),
-        ("prop_mach_slider", 0.0, 0.89), ("trim_mach_slider", 0.50, 0.89)]),
+        ("prop_mach_slider", 0.0, 0.89), ("trim_mach_slider", 0.50, 0.89),
+        ("traj_mach", 0.74, 0.89)]),
     ("g_mass", "Masse", "t", 300.0, 575.0, 1.0, 500.0, "{:.0f}", [
-        ("trim_mass_slider", 300.0, 575.0), ("perf_mass", 300.0, 575.0)]),
+        ("trim_mass_slider", 300.0, 575.0), ("perf_mass", 300.0, 575.0),
+        ("traj_mass", 350.0, 575.0)]),
     ("g_xcg", "Centrage x_cg", "MAC", 0.20, 0.45, 0.005, 0.40, "{:.3f}", [
         ("trim_xcg_slider", 0.20, 0.45)]),
 ]
@@ -2215,6 +2233,367 @@ def page_perf():
 
 
 # ---------------------------------------------------------------------------
+# Page Trajectoire (maquette « Trajectoire » : accent TEAL, pas de volet droit,
+# barre de contrôles horizontale collante — même structure que Performance)
+# ---------------------------------------------------------------------------
+
+_TRAJ_CTRL_CSS = """
+<style>
+/* Barre de contrôles horizontale, collante sous le titre (maquette Trajectoire) */
+.st-key-traj_ctrlbar {
+    position: sticky; top: 3.4rem; z-index: 30;
+    background: rgba(255,255,255,.62) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    backdrop-filter: blur(28px) saturate(180%);
+    border: .5px solid rgba(255,255,255,.7) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 1px 2px rgba(16,24,40,.04),
+                0 10px 30px rgba(16,24,40,.06) !important;
+    padding: .65rem 1.2rem .35rem !important; margin-bottom: 1.1rem; }
+.st-key-traj_ctrlbar [data-testid="stSlider"] { padding-top: 0; }
+.st-key-traj_ctrlbar [data-testid="stSliderThumbValue"] { display: none; }
+/* piste remplie en TEAL (la couleur du thème global est navy) — maquette */
+.st-key-traj_ctrlbar [data-testid="stSliderTrack"] > div { background: #2CC7C0 !important; }
+.perf-ctrl-head { display:flex; align-items:baseline; justify-content:space-between;
+    gap:8px; margin:0 0 -.35rem; }
+.perf-ctrl-l { font-size: 12px; font-weight: 600; color: #3A3A3C;
+    letter-spacing: -.003em; white-space: nowrap; }
+.perf-ctrl-v { font-family:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
+    font-size:14px; font-weight:500; color:#0C7C77; font-variant-numeric:tabular-nums;
+    letter-spacing:-.02em; white-space:nowrap; }
+.perf-ctrl-v .u { color:#8E8E93; font-size:11px; margin-left:2px; }
+[data-testid="stPlotlyChart"] { width: 100% !important; }
+[data-testid="stPlotlyChart"] > div, [data-testid="stPlotlyChart"] .js-plotly-plot {
+    width: 100% !important; }
+.perf-modpill { display:inline-flex; align-items:center; gap:8px; padding:7px 13px;
+    border-radius:999px; background:rgba(44,199,192,.12); color:#0C7C77;
+    font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+.perf-modpill .dot { width:8px; height:8px; border-radius:50%; background:#2CC7C0;
+    box-shadow:0 0 0 4px rgba(44,199,192,.18); }
+.kpi-swatch { width:9px; height:9px; border-radius:50%; display:inline-block;
+    margin-right:6px; vertical-align:1px; }
+.perf-legend { display:flex; flex-wrap:wrap; gap:14px; padding:2px 2px 8px;
+    font-size:11.5px; color:#6E6E73; }
+.perf-legend i { display:inline-flex; align-items:center; gap:6px; font-style:normal; }
+.perf-legend i b { width:15px; height:3px; border-radius:2px; display:inline-block; }
+.perf-legend i .sq { width:9px; height:9px; border-radius:50%; display:inline-block;
+    border:2px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.06); }
+.perf-recap { width:100%; border-collapse:collapse; margin-top:6px;
+    font-variant-numeric:tabular-nums; }
+.perf-recap th, .perf-recap td { text-align:right; padding:11px 14px; font-size:13px; }
+.perf-recap th { font-size:11px; font-weight:600; color:#8E8E93;
+    text-transform:uppercase; letter-spacing:.04em;
+    border-bottom:1px solid rgba(60,60,67,.18); }
+.perf-recap th:first-child, .perf-recap td:first-child { text-align:left; }
+.perf-recap td { font-family:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
+    color:#3A3A3C; border-bottom:.5px solid rgba(60,60,67,.12); }
+.perf-recap td:first-child { font-family:inherit; font-weight:600; color:#1C1C1E; }
+.perf-recap .dotc { width:8px; height:8px; border-radius:50%; display:inline-block;
+    margin-right:8px; vertical-align:1px; }
+.perf-recap tr:last-child td { border-bottom:none; }
+.perf-recap tr.is-best td { background:rgba(44,199,192,.07); }
+</style>
+"""
+
+
+def page_traj():
+    # Maquette « Trajectoire » : accent TEAL local, PAS de volet de droite —
+    # paramètres dans une barre horizontale collante ; ruban gauche déroulé.
+    acc_d, acc_v = ACCENTS["Trajectoire"]          # ("#0C7C77", "#2CC7C0")
+    C_DIR = "#8E8E93"                              # gris = profil direct (maquette)
+    st.markdown(_DASH_CSS + _TRAJ_CTRL_CSS, unsafe_allow_html=True)
+
+    st.markdown('<div style="text-align:right;margin-bottom:.3rem">'
+                '<span class="perf-modpill"><span class="dot"></span>'
+                'Trajectoire · Mission</span></div>', unsafe_allow_html=True)
+    page_head("Prédiction de trajectoire",
+              "Profil vertical de croisière — temps de vol, carburant et émissions, "
+              "comparés sans step-climb, avec 1 et avec 2 step-climbs", accent=acc_v)
+
+    # ── Barre de contrôles horizontale (6 paramètres, collante) ────────────
+    with st.container(border=True, key="traj_ctrlbar"):
+        cols = st.columns(6)
+        # (libellé, unité, min, max, défaut, pas, clé, format)
+        defs = [
+            ("Masse initiale", "t",   350.0,  575.0,   500.0,   1.0,  "traj_mass", 0),
+            ("Distance",       "km", 2000.0, 14000.0, 12000.0, 100.0, "traj_dist", 0),
+            ("Mach",           "",      0.74,    0.89,    0.82,  0.01, "traj_mach", 2),
+            ("Palier de base", "",    280.0,  380.0,   310.0,  10.0,  "traj_base", "FL"),
+            ("Step-climb",     "ft", 1000.0,  4000.0,  2000.0, 1000.0, "traj_step", 0),
+            ("ΔISA",           "°C",  -20.0,   20.0,     0.0,   1.0,  "traj_disa", "s"),
+        ]
+
+        def _fv(v, d):
+            if d == "s":
+                return ("+" if v >= 0 else "−") + str(abs(int(round(v))))
+            if d == "FL":
+                return f"FL{int(round(v))}"
+            if d == 0:
+                return f"{int(round(v)):,}".replace(",", " ")
+            return f"{v:.{d}f}"
+
+        vals = {}
+        for col, (lab, unit, lo, hi, dflt, step, key, dec) in zip(cols, defs):
+            with col:
+                st.session_state.setdefault(key, dflt)
+                cur = float(st.session_state[key])
+                u = f'<span class="u">{unit}</span>' if unit else ""
+                st.markdown('<div class="perf-ctrl-head">'
+                            f'<span class="perf-ctrl-l">{lab}</span>'
+                            f'<span class="perf-ctrl-v">{_fv(cur, dec)}{u}</span>'
+                            '</div>', unsafe_allow_html=True)
+                vals[key] = st.slider(lab, lo, hi, step=step, key=key,
+                                      label_visibility="collapsed")
+
+    # Preset « étude de cas » (livrable 4) : charge le vol réel EK215. Le callback
+    # écrit les 6 clés d'état AVANT le rerun → les curseurs reprennent ces valeurs.
+    def _preset_ek215():
+        # 13 000 km = portion de CROISIÈRE (total DXB→LAX ~13 400 km, montée et
+        # descente retirées ; l'énoncé ne modélise que la croisière).
+        for k, v in (("traj_mass", 500.0), ("traj_dist", 13000.0),
+                     ("traj_mach", 0.85), ("traj_base", 310.0),
+                     ("traj_step", 2000.0), ("traj_disa", 0.0)):
+            st.session_state[k] = v
+    pc = st.columns([1.25, 4])
+    with pc[0]:
+        st.button("✈︎ Cas EK215", on_click=_preset_ek215,
+                  use_container_width=True,
+                  help="Charge le vol Emirates Dubaï → Los Angeles "
+                       "(13 000 km de croisière · 500 t · M0.85 · base FL310 · steps 2000 ft)")
+    with pc[1]:
+        st.caption("Étude de cas — **Emirates EK215** · Dubaï (DXB) → Los Angeles "
+                   "(LAX) · A380-800 · ~13 000 km de croisière (sur ~13 400 km au total)")
+
+    mass   = vals["traj_mass"] * 1000.0
+    dist_m = vals["traj_dist"] * 1000.0
+    mach   = vals["traj_mach"]
+    base_fl = int(round(vals["traj_base"]))
+    base_m = vals["traj_base"] * 100.0 * mod_traj.FT
+    step_ft = vals["traj_step"]
+    disa   = vals["traj_disa"]
+
+    cas = traj_compare(mass, dist_m, mach, base_m, step_ft, disa, _aero_sig())
+
+    if not any(cas[k]['feasible'] for k in (0, 1, 2)):
+        st.info("**Avion limité en poussée (ou équilibre impossible) sur les trois "
+                "profils.** Aucune trajectoire exploitable → **descends** le palier "
+                "de base, **allège** l'avion ou **réduis** le Mach.", icon="⚠️")
+        return
+
+    fl_txt = lambda lv: " → ".join(f"FL{int(round(a/mod_traj.FT/100))}" for a in lv)
+    fuel_t = lambda k: cas[k]['fuel'] / 1000.0 if cas[k]['feasible'] else None
+    f0 = fuel_t(0)
+
+    def _gain(k):
+        """Gain de carburant vs direct : (Δt, Δ%) ou (None, None)."""
+        fk = fuel_t(k)
+        if f0 is None or fk is None:
+            return None, None
+        return f0 - fk, (f0 - fk) / f0 * 100.0
+
+    # ── Bande d'indicateurs : Direct · 1 SC · 2 SC · Économie max ──────────
+    def _kpi_case(k, lab, tag, sw, hl=False):
+        lab_sw = f'<span class="kpi-swatch" style="background:{sw}"></span>{lab}'
+        c = cas[k]
+        if not c['feasible']:
+            return _dash_kpi(lab_sw, "—", "", "infaisable", tag=tag, acc=acc_d)
+        if k == 0:
+            desc = f"{c['time']/3600:.2f} h · FL{base_fl}"
+        else:
+            dt, dp = _gain(k)
+            desc = (f"gain {dt:.1f} t · −{dp:.1f} %" if dt is not None
+                    else f"{c['time']/3600:.2f} h")
+        return _dash_kpi(lab_sw, f"{fuel_t(k):.1f}", "t carb.", desc,
+                         tag=tag, hl=hl, acc=acc_d)
+
+    # carte « économie maximale » : CO2 évité entre direct et le meilleur faisable
+    kbest = max((k for k in (1, 2) if cas[k]['feasible']), default=None)
+    if kbest is not None and cas[0]['feasible']:
+        co2_saved = (cas[0]['emissions']['CO2'] - cas[kbest]['emissions']['CO2']) / 1000.0
+        dt, dp = _gain(kbest)
+        eco_num, eco_desc = f"{co2_saved:.1f}", f"{dt:.1f} t carburant · −{dp:.1f} %"
+    else:
+        eco_num, eco_desc = "—", "indéterminé"
+
+    st.markdown(
+        '<div class="dash-kpi-grid" style="grid-template-columns:repeat(4,1fr)">'
+        + _kpi_case(0, "Direct", "sans step-climb", C_DIR)
+        + _kpi_case(1, "1 step-climb", "1 montée", acc_v)
+        + _kpi_case(2, "2 step-climbs", "2 montées", acc_d, hl=True)
+        + _dash_kpi("Économie maximale", eco_num, "t CO₂", eco_desc,
+                    tag="2 SC vs direct", acc=acc_d)
+        + '</div>', unsafe_allow_html=True)
+
+    # ── Séries par profil (profil vertical, masse, carburant cumulé) ───────
+    runs = []
+    for k, name, col in ((0, "Direct", C_DIR), (1, "1 SC", acc_v), (2, "2 SC", acc_d)):
+        c = cas[k]
+        if not c['feasible']:
+            runs.append(None)
+            continue
+        prof = c['result']['profile']
+        s_km = np.array([p['s'] / 1000.0 for p in prof])
+        fl   = np.array([p['alt'] / mod_traj.FT / 100.0 for p in prof])
+        m_t  = np.array([p['mass'] / 1000.0 for p in prof])
+        fb_t = np.array([(mass - p['mass']) / 1000.0 for p in prof])
+        runs.append({'name': name, 'col': col, 's': s_km, 'fl': fl,
+                     'm': m_t, 'fb': fb_t})
+
+    def _common(fig, xt, yt):
+        fig.update_xaxes(showgrid=False, zeroline=False, color="#8B93A1")
+        fig.update_yaxes(showgrid=True, gridcolor="rgba(60,60,67,.07)",
+                         zeroline=False, color="#8B93A1")
+        fig.update_layout(height=300, template="plotly_white",
+            font=dict(family=FONT_UI), margin=dict(t=12, b=40, l=10, r=14),
+            xaxis_title=xt, yaxis_title=yt, showlegend=False,
+            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+
+    def _chart_head(nm, sub, cur):
+        st.markdown(f'<div class="dash-chart-head"><span class="nm">{nm}</span>'
+                    f'<span class="dash-chart-sub">{sub}</span>'
+                    f'<span class="cur" style="--acc:{acc_d}">{cur}</span></div>',
+                    unsafe_allow_html=True)
+
+    def _legend(items):
+        parts = []
+        for kind, col, lab in items:
+            mark = (f'<b style="background:{col}"></b>' if kind == "line"
+                    else f'<span class="sq" style="background:{col}"></span>')
+            parts.append(f"<i>{mark}{lab}</i>")
+        st.markdown('<div class="perf-legend">' + "".join(parts) + '</div>',
+                    unsafe_allow_html=True)
+
+    leg3 = [("line", C_DIR, "Direct"), ("line", acc_v, "1 SC"),
+            ("line", acc_d, "2 SC")]
+    row1 = st.columns(2)
+    row2 = st.columns(2)
+
+    # ── 1. Profil vertical (altitude en escalier) ──────────────────────────
+    with row1[0], st.container(border=True):
+        lv2 = cas[2]['levels'] if cas[2]['feasible'] else cas[0]['levels']
+        _chart_head("Profil vertical", "altitude = f(distance)", fl_txt(lv2))
+        _legend(leg3)
+        fig = go.Figure()
+        for r in runs:
+            if r is None:
+                continue
+            fig.add_trace(go.Scatter(x=r['s'], y=r['fl'], mode="lines",
+                line=dict(color=r['col'], width=2.6 if r['name'] != "Direct" else 2,
+                          shape="linear"), showlegend=False,
+                hovertemplate=r['name'] + " · %{x:.0f} km<br>FL%{y:.0f}<extra></extra>"))
+        _common(fig, "Distance parcourue [km]", "Niveau de vol [FL]")
+        st.plotly_chart(fig, config=PLOTLY_CONF)
+
+    # ── 2. Masse en vol ────────────────────────────────────────────────────
+    with row1[1], st.container(border=True):
+        m_end = (mass - cas[2]['fuel']) / 1000.0 if cas[2]['feasible'] else np.nan
+        _chart_head("Masse en vol", "m = f(distance)",
+                    f"{m_end:.0f} t à l'arrivée" if np.isfinite(m_end) else "—")
+        _legend(leg3)
+        fig = go.Figure()
+        for r in runs:
+            if r is None:
+                continue
+            fig.add_trace(go.Scatter(x=r['s'], y=r['m'], mode="lines",
+                line=dict(color=r['col'], width=2.6 if r['name'] != "Direct" else 2),
+                showlegend=False,
+                hovertemplate=r['name'] + " · %{x:.0f} km<br>%{y:.1f} t<extra></extra>"))
+        _common(fig, "Distance parcourue [km]", "Masse [t]")
+        st.plotly_chart(fig, config=PLOTLY_CONF)
+
+    # ── 3. Carburant cumulé ────────────────────────────────────────────────
+    with row2[0], st.container(border=True):
+        _chart_head("Carburant cumulé", "∫ W_F dt",
+                    f"{fuel_t(2):.1f} t (2 SC)" if cas[2]['feasible'] else "—")
+        _legend(leg3)
+        fig = go.Figure()
+        for r in runs:
+            if r is None:
+                continue
+            fig.add_trace(go.Scatter(x=r['s'], y=r['fb'], mode="lines",
+                line=dict(color=r['col'], width=2.6 if r['name'] != "Direct" else 2),
+                fill="tozeroy" if r['name'] == "2 SC" else None,
+                fillcolor=_rgba(acc_d, .10), showlegend=False,
+                hovertemplate=r['name'] + " · %{x:.0f} km<br>%{y:.1f} t<extra></extra>"))
+        _common(fig, "Distance parcourue [km]", "Carburant brûlé [t]")
+        fig.update_yaxes(rangemode="tozero")
+        st.plotly_chart(fig, config=PLOTLY_CONF)
+
+    # ── 4. Émissions de CO2 (barres comparatives) ──────────────────────────
+    with row2[1], st.container(border=True):
+        labels, co2s, cols = [], [], []
+        for k, name, col in ((0, "Direct", C_DIR), (1, "1 SC", acc_v),
+                             (2, "2 SC", acc_d)):
+            if cas[k]['feasible']:
+                labels.append(name)
+                co2s.append(cas[k]['emissions']['CO2'] / 1000.0)
+                cols.append(col)
+        saved = ((cas[0]['emissions']['CO2'] - cas[kbest]['emissions']['CO2']) / 1000.0
+                 if (kbest is not None and cas[0]['feasible']) else None)
+        _chart_head("Émissions de CO₂", "total croisière",
+                    f"−{saved:.1f} t CO₂" if saved is not None else "—")
+        _legend([("dot", C_DIR, "Direct"), ("dot", acc_v, "1 SC"),
+                 ("dot", acc_d, "2 SC")])
+        fig = go.Figure()
+        fig.add_trace(go.Bar(x=labels, y=co2s, marker_color=cols, width=0.55,
+            text=[f"{v:.1f}" for v in co2s], textposition="outside",
+            textfont=dict(family=FONT_MONO, size=12, color="#3A3A3C"),
+            hovertemplate="%{x}<br>%{y:.1f} t CO₂<extra></extra>"))
+        _common(fig, "", "CO₂ [t]")
+        fig.update_yaxes(rangemode="tozero")
+        fig.update_xaxes(showgrid=False)
+        st.plotly_chart(fig, config=PLOTLY_CONF)
+
+    # ── Récapitulatif & hypothèses (volet dépliable, ouvert par défaut) ────
+    with st.expander("Comparaison des profils — récapitulatif & hypothèses",
+                     expanded=True):
+        def _i(v):
+            return f"{int(round(v)):,}".replace(",", " ")
+        hdr = ("<tr><th>Profil</th><th>Paliers</th><th>Temps [h]</th>"
+               "<th>Carburant [t]</th><th>CO<sub>2</sub> [t]</th>"
+               "<th>NO<sub>x</sub> [kg]</th><th>CO [kg]</th><th>Gain</th></tr>")
+        body = ""
+        for k, name, dot, hl in ((0, "Direct", C_DIR, False),
+                                 (1, "1 step-climb", acc_v, False),
+                                 (2, "2 step-climbs", acc_d, True)):
+            c = cas[k]
+            cls = ' class="is-best"' if hl else ""
+            nom = (f'<td><span class="dotc" style="background:{dot}"></span>'
+                   f'{name}</td>')
+            if not c['feasible']:
+                cells = f"<td>{fl_txt(c['levels'])}</td>" + "<td>—</td>" * 6
+            else:
+                e = c['emissions']
+                dt, dp = _gain(k)
+                gain = f"−{dp:.1f} %" if (dt is not None and dp > 0.05) else "—"
+                cells = (f"<td>{fl_txt(c['levels'])}</td><td>{c['time']/3600:.2f}</td>"
+                         f"<td>{c['fuel']/1000:.1f}</td><td>{e['CO2']/1000:.1f}</td>"
+                         f"<td>{_i(e['NOx'])}</td><td>{_i(e['CO'])}</td><td>{gain}</td>")
+            body += f"<tr{cls}>{nom}{cells}</tr>"
+        st.markdown(f'<table class="perf-recap">{hdr}{body}</table>',
+                    unsafe_allow_html=True)
+        st.markdown(
+            '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:.5rem 0 .2rem">'
+            + "".join(
+                f'<span style="font-family:{FONT_MONO};font-size:12px;'
+                'color:#6E6E73;background:rgba(120,120,128,.08);padding:5px 10px;'
+                f'border-radius:8px">{t}</span>'
+                for t in ("S_wb = 859 m²", "c̄_w = 11 m", "x_cg = 0.40 MAC",
+                          "φ_T = 2°", "W_F^max = 9857 kg/h/mot.",
+                          "step RVSM = 2000 ft", "M_MO = 0.89"))
+            + '</div>', unsafe_allow_html=True)
+        st.caption(
+            "À chaque pas de distance, l'avion est équilibré en croisière "
+            "(module Trim) → débit W_F et TAS ; on intègre le temps (dt = ds ⁄ TAS), "
+            "le carburant brûlé (la masse décroît) et les masses de polluants "
+            "(indices d'émission OACI × carburant brûlé). Un **step-climb** fait "
+            "passer l'avion à un palier plus haut, où la portée spécifique est "
+            "meilleure → moins de carburant. **Hypothèses :** vent nul "
+            "(distance sol = distance air), profil **vertical** seul, step-climbs "
+            "**instantanés**.")
+
+
+# ---------------------------------------------------------------------------
 # Navigation
 # ---------------------------------------------------------------------------
 
@@ -2226,6 +2605,7 @@ PAGES = {
     "Propulsion & Émissions": page_prop,
     "Équilibrage (Trim)": page_trim,
     "Performance croisière": page_perf,
+    "Trajectoire": page_traj,
 }
 
 @st.cache_data
@@ -2249,6 +2629,13 @@ def apply_page_background():
                 "transparent 55%), radial-gradient(90% 60% at 0% 0%, "
                 "rgba(255,159,10,.06), transparent 50%), linear-gradient(180deg, "
                 "#FBF4EA 0%, #F6F4F1 40%, #EFF1F4 100%)")
+    elif nav == "Trajectoire":
+        # Maquette « Trajectoire » : fond FROID teinté teal (deux halos teal +
+        # dégradé vert d'eau → bleuté), accordé à l'accent teal de la page.
+        fond = ("radial-gradient(120% 80% at 82% -12%, rgba(44,199,192,.14), "
+                "transparent 55%), radial-gradient(90% 60% at 0% 0%, "
+                "rgba(44,199,192,.06), transparent 50%), linear-gradient(180deg, "
+                "#EAF5F4 0%, #F1F5F5 40%, #EFF1F4 100%)")
     else:
         vif = ACCENTS.get(nav, (NAVY, "#3E6B99"))[1]
         fond = (f"radial-gradient(120% 80% at 78% -10%, {vif}1A, transparent 55%), "
@@ -2294,6 +2681,9 @@ _NAV_ICONS = {
                            '<path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>', "#5BD07A"),
     "Performance croisière": ('<path d="m12 14 4-4"/>'
                               '<path d="M3.34 19a10 10 0 1 1 17.32 0"/>', "#9AA7B6"),
+    "Trajectoire": ('<circle cx="6" cy="19" r="3"/>'
+                    '<path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/>'
+                    '<circle cx="18" cy="5" r="3"/>', "#40D0C8"),
 }
 
 
@@ -2432,7 +2822,7 @@ st.sidebar.markdown(
 # Réduit le ruban gauche dans un module ; reste déroulé à l'Accueil et sur la
 # page Performance croisière (maquette « Croisière & Coût » : pas de volet droit,
 # contrôles en barre horizontale → le ruban gauche se déroule en grand).
-if choix_page not in ("Accueil", "Performance croisière"):
+if choix_page not in ("Accueil", "Performance croisière", "Trajectoire"):
     st.markdown(_RAIL_CSS, unsafe_allow_html=True)
 
 PAGES[choix_page]()
