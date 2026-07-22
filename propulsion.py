@@ -161,6 +161,12 @@ _EI_CO_REF  = np.array([12.65, 1.05,  0.31,   0.33])    # g/kg
 
 EI_CO2 = 3.16          # kg/kg — indice constant (modèle proportionnel)
 
+# Débit carburant maximal d'UN moteur (W_F^max), utilisé pour repasser du débit
+# NORMALISÉ (sortie de get_fuel_flow, sans dimension) au débit PHYSIQUE en kg/s.
+# La méthode BFF compare le débit corrigé de croisière aux valeurs de référence
+# OACI (_WF_C_REF, en kg/s) : les deux doivent être dans les mêmes unités.
+_WF_MAX_KGS = 9856.8 / 3600.0     # ≈ 2.738 kg/s par moteur
+
 _RH    = 0.80          # humidité relative de l'air
 _X_BFF = 1.0           # exposants de la correction du débit (Ghazi et Botez)
 _Y_BFF = 0.5
@@ -238,9 +244,19 @@ def get_emission_indices(n1, mach, altitude, delta_isa=0.0):
     """
     theta = mod_atm.theta(altitude, delta_isa)
     delta = mod_atm.delta(altitude, delta_isa)
+    lapse = delta * np.sqrt(theta)
 
-    wf = get_fuel_flow(n1, mach, altitude, delta_isa)
-    wf_c = wf / (delta * np.sqrt(theta))
+    # Débit carburant PHYSIQUE réel d'un moteur [kg/s]. Deux exigences :
+    #   • même unité que la table OACI _WF_C_REF (× _WF_MAX_KGS, la valeur
+    #     normalisée de get_fuel_flow → kg/s) ;
+    #   • COHÉRENCE avec la consommation réellement brûlée : le module de trim
+    #     retire le lapse δ√θ que get_fuel_flow réapplique (sinon le débit est
+    #     ~5× trop bas en altitude). On utilise donc ici le MÊME débit que celui
+    #     de la consommation validée, faute de quoi la croisière tomberait sous
+    #     le point de ralenti de la courbe LTO (extrapolation) alors qu'elle se
+    #     situe en réalité au voisinage du régime d'approche.
+    wf = get_fuel_flow(n1, mach, altitude, delta_isa) / lapse * _WF_MAX_KGS
+    wf_c = wf / lapse
     wf_c_ref = ((1.0 + 0.2 * mach**2) * theta**(3.8 + _Y_BFF)
                 / delta**(1.0 - _X_BFF)) * wf_c
 
