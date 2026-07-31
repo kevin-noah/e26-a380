@@ -9,6 +9,7 @@ Lancement : streamlit run app.py
 """
 
 import os
+import re
 import json
 import base64
 from pathlib import Path
@@ -2617,14 +2618,32 @@ FIGDIR = Path(__file__).parent / "rapport" / "figures"
 FIG_VALEURS = FIGDIR / "valeurs.json"
 
 
+# Fonds opaques posés par matplotlib : le rectangle de la figure (toujours
+# patch_1) et celui des axes (premier patch de chaque <g id="axes_k">). On les
+# neutralise à l'affichage pour que la figure se pose sur le verre dépoli de sa
+# carte, comme les graphes Plotly des autres pages — le fichier du rapport, lui,
+# n'est pas touché. Les marqueurs blancs (points d'optima) portent un style
+# composé (fill + stroke) que ces motifs ne peuvent pas atteindre.
+_SVG_FOND_FIG = re.compile(r'(<g id="patch_1">\s*<path[^>]*?)style="fill: #ffffff"')
+_SVG_FOND_AXES = re.compile(
+    r'(<g id="axes_\d+">\s*<g id="patch_\d+">\s*<path[^>]*?)style="fill: #ffffff"')
+
+
 @st.cache_data
 def _fig_uri(nom, mtime):
-    """Figure encodée en data-URI (mtime → invalidé si make_figures.py la
-    régénère). Le passage par <img> isole chaque image : pas de collision entre
-    les identifiants de glyphes des <defs> des SVG matplotlib."""
+    """Figure encodée en data-URI, fond rendu transparent (mtime → invalidé si
+    make_figures.py la régénère). Le passage par <img> isole chaque image : pas
+    de collision entre les identifiants de glyphes des <defs> des SVG."""
     p = FIGDIR / nom
-    mime = "image/svg+xml" if p.suffix == ".svg" else "image/png"
-    return f"data:{mime};base64," + base64.b64encode(p.read_bytes()).decode()
+    if p.suffix == ".svg":
+        svg = _SVG_FOND_AXES.sub(r'\1style="fill: none"',
+                                 _SVG_FOND_FIG.sub(r'\1style="fill: none"',
+                                                   p.read_text(encoding="utf-8")))
+        donnees, mime = svg.encode("utf-8"), "image/svg+xml"
+    else:
+        # PNG déjà détourés à la génération (voir make_png.py)
+        donnees, mime = p.read_bytes(), "image/png"
+    return f"data:{mime};base64," + base64.b64encode(donnees).decode()
 
 
 def _fig_src(nom):
