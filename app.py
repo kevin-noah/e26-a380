@@ -2785,11 +2785,17 @@ _PRES_CSS = """
     box-shadow: 0 1px 2px rgba(16,24,40,.04),
                 0 10px 30px rgba(16,24,40,.06) !important;
     padding: .55rem .9rem !important; margin-bottom: 1.1rem; }
-/* Figure : image pleine largeur de sa carte, bornée pour les figures de
-   colonne (sinon un graphe 3,5 in projeté en 1400 px devient illisible). */
+/* Figure : l'image remplit toute la largeur de sa carte (les figures du
+   rapport sont vectorielles, elles ne se dégradent pas en s'agrandissant).
+   Garde-fou en hauteur pour qu'une figure haute tienne dans l'écran sans
+   qu'on ait à faire défiler en pleine soutenance ; object-fit préserve le
+   rapport d'aspect quand ce plafond s'applique. */
 .pr-fig { display:flex; justify-content:center; padding: 4px 0 2px; }
-.pr-fig img { width:100%; max-width:760px; height:auto; display:block; }
-.pr-fig.large img { max-width:100%; }
+.pr-fig img { width:100%; height:auto; max-height:82vh; object-fit:contain;
+    display:block; }
+/* en galerie, deux figures par ligne : plafond plus bas pour garder une vue
+   d'ensemble sans défilement */
+.pr-fig.grille img { max-height:56vh; }
 .pr-cap { font-size:11.5px; color:#8B93A1; line-height:1.5; margin:8px 4px 0;
     border-top:.5px solid rgba(60,60,67,.10); padding-top:8px; }
 .pr-cap b { color:#6E6E73; font-weight:600; }
@@ -2836,6 +2842,7 @@ _PRES_CSS = """
 /* Tableaux du rapport */
 .pr-tbl { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums;
     margin-top:2px; }
+.pr-tbl.etroit { max-width:620px; }
 .pr-tbl th, .pr-tbl td { text-align:right; padding:9px 13px; font-size:13px; }
 .pr-tbl th { font-size:10.5px; font-weight:700; color:#8E8E93;
     text-transform:uppercase; letter-spacing:.05em;
@@ -2870,13 +2877,13 @@ def _pr_cardhead(titre, sub="", badge="", acc="#3634A3"):
                 unsafe_allow_html=True)
 
 
-def _pr_fig(nom, acc, legende=True):
+def _pr_fig(nom, acc, legende=True, grille=False):
     """Carte figure : en-tête (titre · sous-titre · n° du rapport), image,
     légende. Dégrade proprement si le fichier n'a pas été généré."""
     e = FIG.get(nom)
     if e is None:
         return
-    fichier, num, _partie, titre, sub, cap, large = e
+    fichier, num, _partie, titre, sub, cap, _large = e
     with st.container(border=True):
         _pr_cardhead(titre, sub, f"Fig. {num}", acc)
         src = _fig_src(fichier)
@@ -2885,7 +2892,7 @@ def _pr_fig(nom, acc, legende=True):
                        "lancer `python rapport/figures/make_figures.py`.",
                        icon="⚠️")
             return
-        cls = "pr-fig large" if large else "pr-fig"
+        cls = "pr-fig grille" if grille else "pr-fig"
         st.markdown(f'<div class="{cls}"><img src="{src}" alt="{titre}"></div>',
                     unsafe_allow_html=True)
         if legende:
@@ -2893,28 +2900,32 @@ def _pr_fig(nom, acc, legende=True):
                         unsafe_allow_html=True)
 
 
-def _pr_figs(noms, acc, par=2):
-    """Plusieurs figures en grille (les figures pleine largeur restent seules)."""
+def _pr_figs(noms, acc, par=1):
+    """Suite de figures. Une par ligne dans le fil (chacune occupe l'écran, on
+    la commente puis on descend) ; deux par ligne en galerie."""
     reste = list(noms)
     while reste:
-        if FIG.get(reste[0], (None,) * 7)[6]:      # figure pleine largeur
-            _pr_fig(reste.pop(0), acc)
-            continue
         lot, reste = reste[:par], reste[par:]
+        if len(lot) == 1:
+            _pr_fig(lot[0], acc)
+            continue
         for col, nom in zip(st.columns(len(lot)), lot):
             with col:
-                _pr_fig(nom, acc)
+                _pr_fig(nom, acc, grille=True)
 
 
-def _pr_tbl(entetes, lignes, cap="", acc="#3634A3", hl=None):
-    """Tableau façon rapport — hl = index (0-based) de la ligne à surligner."""
+def _pr_tbl(entetes, lignes, cap="", acc="#3634A3", hl=None, etroit=False):
+    """Tableau façon rapport — hl = index (0-based) de la ligne à surligner,
+    etroit = borne la largeur (tableaux à deux colonnes, qui s'étireraient
+    inutilement sur toute la carte)."""
     th = "".join(f"<th>{h}</th>" for h in entetes)
     tr = ""
     for i, ligne in enumerate(lignes):
         cls = ' class="hl"' if hl is not None and i == hl else ""
         tr += f"<tr{cls}>" + "".join(f"<td>{c}</td>" for c in ligne) + "</tr>"
     c = f'<p class="pr-tblcap">{cap}</p>' if cap else ""
-    st.markdown(f'<table class="pr-tbl" style="--acc:{acc}"><thead><tr>{th}'
+    cls_t = "pr-tbl etroit" if etroit else "pr-tbl"
+    st.markdown(f'<table class="{cls_t}" style="--acc:{acc}"><thead><tr>{th}'
                 f'</tr></thead><tbody>{tr}</tbody></table>{c}',
                 unsafe_allow_html=True)
 
@@ -3165,10 +3176,8 @@ def _pr_ek_vol(acc_d, acc_v, v):
                     "au Mach économique 0.748", tag="vol direct", acc=acc_d)
         + '</div>', unsafe_allow_html=True)
 
-    c = st.columns([1.15, 1])
-    with c[0]:
-        _pr_fig("fig_ek_route.svg", acc_d)
-    with c[1], st.container(border=True):
+    _pr_fig("fig_ek_route.svg", acc_d)
+    with st.container(border=True):
         _pr_cardhead("Paramètres de la trajectoire",
                      "configuration retenue pour toute l'étude",
                      "Tableau III", acc_d)
@@ -3182,7 +3191,7 @@ def _pr_ek_vol(acc_d, acc_v, v):
             ("M_LRC", f"{val['LRC']['mach']:.3f}"),
             ("M_ECON (CI = 180)", f"{val['ECON']['mach']:.3f}"),
             ("Amplitude Δh", "2 000 ft (RVSM)"),
-        ], acc=acc_d, hl=6)
+        ], acc=acc_d, hl=6, etroit=True)
 
 
 def _pr_ek_res(acc_d, acc_v, v):
@@ -3321,7 +3330,7 @@ def _pr_galerie(acc_d, acc_v, v):
     if partie != "Tableaux":
         noms = [f[0] for f in FIGURES if f[2] == partie]
         st.caption(f"{len(noms)} figure(s) — partie « {partie} » du rapport")
-        _pr_figs(noms, acc_d)
+        _pr_figs(noms, acc_d, par=2)
         return
 
     # ── Tableaux : les quatre du rapport + les compléments de la revue ──────
