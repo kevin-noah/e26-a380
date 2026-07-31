@@ -9,6 +9,7 @@ Lancement : streamlit run app.py
 """
 
 import os
+import json
 import base64
 from pathlib import Path
 from urllib.parse import quote
@@ -43,6 +44,7 @@ ACCENTS = {
     "Équilibrage (Trim)":     ("#6E6E73", "#8E8E93"),
     "Performance croisière":  ("#54606E", "#8794A4"),
     "Trajectoire":            ("#0C7C77", "#2CC7C0"),
+    "Présentation":           ("#3634A3", "#5E5CE6"),
 }
 # Courbes multi-séries (Mach) — couleurs système Apple
 APPLE_SEQ = ["#0A84FF", "#30D158", "#FF9F0A", "#BF5AF2", "#FF375F", "#64D2FF"]
@@ -381,13 +383,13 @@ def perf_cruise(mass, altitude, delta_isa, cost_index, mach_min, mach_max,
 
 @st.cache_data(show_spinner=False)
 def traj_compare(mass, dist_m, mach, base_m, step_ft, delta_isa, sig,
-                 ds=mod_traj.SUBSTEP_DEFAUT):
+                 wind_kt=0.0, ds=mod_traj.SUBSTEP_DEFAUT):
     """Compare 0 / 1 / 2 step-climbs pour une même trajectoire (sig invalide le
     cache aéro). Renvoie le dict {0,1,2} de mod_traj.compare_step_climbs."""
     model = load_aero_model()
     return mod_traj.compare_step_climbs(
         mass, dist_m, mach, base_m, step_ft=step_ft, delta_isa=delta_isa,
-        model=model, ds=ds)
+        model=model, ds=ds, wind_kt=wind_kt)
 
 
 # ---------------------------------------------------------------------------
@@ -611,6 +613,9 @@ def page_accueil():
         ("07", "Trajectoire", True,
          "Profil vertical de croisière avec step-climbs : temps de vol, "
          "consommation de carburant et émissions, comparés sans / 1 / 2 montées."),
+        ("08", "Présentation", True,
+         "Support de soutenance : les figures et les tableaux du rapport, dans "
+         "l'ordre du récit, puis la galerie complète."),
     ]
     cards = ""
     for num, nom, dispo, desc in modules:
@@ -2310,9 +2315,9 @@ def page_traj():
               "Profil vertical de croisière — temps de vol, carburant et émissions, "
               "comparés sans step-climb, avec 1 et avec 2 step-climbs", accent=acc_v)
 
-    # ── Barre de contrôles horizontale (6 paramètres, collante) ────────────
+    # ── Barre de contrôles horizontale (7 paramètres, collante) ────────────
     with st.container(border=True, key="traj_ctrlbar"):
-        cols = st.columns(6)
+        cols = st.columns(7)
         # (libellé, unité, min, max, défaut, pas, clé, format)
         defs = [
             ("Masse initiale", "t",   350.0,  575.0,   500.0,   1.0,  "traj_mass", 0),
@@ -2321,6 +2326,7 @@ def page_traj():
             ("Palier de base", "",    280.0,  380.0,   310.0,  10.0,  "traj_base", "FL"),
             ("Step-climb",     "ft", 1000.0,  4000.0,  2000.0, 1000.0, "traj_step", 0),
             ("ΔISA",           "°C",  -20.0,   20.0,     0.0,   1.0,  "traj_disa", "s"),
+            ("Vent",           "kt", -100.0,  100.0,     0.0,   5.0,  "traj_vent", "s"),
         ]
 
         def _fv(v, d):
@@ -2352,7 +2358,8 @@ def page_traj():
         # descente retirées ; l'énoncé ne modélise que la croisière).
         for k, v in (("traj_mass", 500.0), ("traj_dist", 13000.0),
                      ("traj_mach", 0.85), ("traj_base", 310.0),
-                     ("traj_step", 2000.0), ("traj_disa", 0.0)):
+                     ("traj_step", 2000.0), ("traj_disa", 0.0),
+                     ("traj_vent", 0.0)):
             st.session_state[k] = v
     pc = st.columns([1.25, 4])
     with pc[0]:
@@ -2371,8 +2378,10 @@ def page_traj():
     base_m = vals["traj_base"] * 100.0 * mod_traj.FT
     step_ft = vals["traj_step"]
     disa   = vals["traj_disa"]
+    vent   = vals["traj_vent"]
 
-    cas = traj_compare(mass, dist_m, mach, base_m, step_ft, disa, _aero_sig())
+    cas = traj_compare(mass, dist_m, mach, base_m, step_ft, disa, _aero_sig(),
+                       wind_kt=vent)
 
     if not any(cas[k]['feasible'] for k in (0, 1, 2)):
         st.info("**Avion limité en poussée (ou équilibre impossible) sur les trois "
@@ -2584,21 +2593,865 @@ def page_traj():
             + '</div>', unsafe_allow_html=True)
         st.caption(
             "À chaque pas de distance, l'avion est équilibré en croisière "
-            "(module Trim) → débit W_F et TAS ; on intègre le temps (dt = ds ⁄ TAS), "
-            "le carburant brûlé (la masse décroît) et les masses de polluants "
-            "(indices d'émission OACI × carburant brûlé). Un **step-climb** fait "
-            "passer l'avion à un palier plus haut, où la portée spécifique est "
-            "meilleure → moins de carburant. **Hypothèses :** vent nul "
-            "(distance sol = distance air), profil **vertical** seul, step-climbs "
-            "**instantanés**.")
+            "(module Trim) → débit W_F et TAS ; la vitesse sol ajoute le vent "
+            "longitudinal (V_GS = V_TAS ± V_W, > 0 = vent arrière) et l'on intègre "
+            "le temps (dt = ds ⁄ V_GS), le carburant brûlé (la masse décroît) et "
+            "les masses de polluants (indices d'émission OACI × carburant brûlé). "
+            "Un **step-climb** fait passer l'avion à un palier plus haut, où la "
+            "portée spécifique est meilleure → moins de carburant. **Hypothèses :** "
+            "vent **constant** sur tout le vol (nul par défaut), profil "
+            "**vertical** seul, step-climbs **instantanés**.")
 
 
 # ---------------------------------------------------------------------------
-# Navigation
+# Page « Présentation » — support de soutenance
+#
+# Les figures ne sont PAS recalculées ici : on affiche telles quelles celles
+# produites par rapport/figures/make_figures.py, donc EXACTEMENT les images du
+# rapport écrit. Deux conséquences voulues : affichage instantané (aucun trim à
+# lancer pendant qu'on parle) et cohérence stricte rapport ↔ soutenance.
+# Les chiffres viennent tous de valeurs.json — aucune valeur saisie à la main.
 # ---------------------------------------------------------------------------
+
+FIGDIR = Path(__file__).parent / "rapport" / "figures"
+FIG_VALEURS = FIGDIR / "valeurs.json"
+
+
+@st.cache_data
+def _fig_uri(nom, mtime):
+    """Figure encodée en data-URI (mtime → invalidé si make_figures.py la
+    régénère). Le passage par <img> isole chaque image : pas de collision entre
+    les identifiants de glyphes des <defs> des SVG matplotlib."""
+    p = FIGDIR / nom
+    mime = "image/svg+xml" if p.suffix == ".svg" else "image/png"
+    return f"data:{mime};base64," + base64.b64encode(p.read_bytes()).decode()
+
+
+def _fig_src(nom):
+    """data-URI de la figure, ou None si le fichier n'est pas là."""
+    p = FIGDIR / nom
+    return _fig_uri(nom, p.stat().st_mtime) if p.exists() else None
+
+
+@st.cache_data
+def _lire_valeurs(mtime):
+    return json.loads(FIG_VALEURS.read_text(encoding="utf-8"))
+
+
+def charger_valeurs():
+    """Chiffres du rapport, ou None si valeurs.json est absent."""
+    if not FIG_VALEURS.exists():
+        return None
+    return _lire_valeurs(FIG_VALEURS.stat().st_mtime)
+
+
+# Registre des figures du rapport : fichier, numéro dans le rapport, partie,
+# titre, sous-titre, légende, pleine largeur (figure* dans le .tex).
+# Les deux figures sans version vectorielle (rendus 3D) sont servies en PNG,
+# converties depuis le PDF dans figures/png/.
+FIGURES = [
+    ("fig_atm.svg", 1, "Modélisation", "Atmosphère standard",
+     "T, P, ρ et a de 0 à 20 000 m",
+     "Profils de l'atmosphère standard calculés par le module : température "
+     "(avec l'effet d'un écart ΔISA = ±10 °C), pression, masse volumique et "
+     "vitesse du son.", False),
+    ("png/fig_geometry.png", 2, "Modélisation", "Géométrie OpenVSP",
+     "maillage .vspgeom de l'A380",
+     "Géométrie OpenVSP de l'A380 utilisée pour les analyses VSPAERO.", False),
+    ("png/fig_aero_surfaces.png", 3, "Modélisation", "Surfaces aérodynamiques",
+     "C_L, C_D, C_M = f(α, Mach)",
+     "Surfaces des coefficients interpolés en fonction de l'incidence et du "
+     "nombre de Mach, pour l'aile + fuselage (haut) et l'empennage horizontal "
+     "(bas).", True),
+    ("fig_polaire.svg", 4, "Modélisation", "Polaire et finesse",
+     "avion complet, trois nombres de Mach",
+     "Polaire (a) et finesse (b) de l'avion complet pour trois nombres de Mach "
+     "(δstab = 0) ; l'étoile marque la finesse maximale.", False),
+    ("fig_ei_lnln.svg", 5, "Modélisation", "Indices d'émission",
+     "diagramme ln-ln, cycle LTO",
+     "Indices d'émission de référence du Trent 970B-84 (banque OACI) aux quatre "
+     "régimes du cycle LTO. La droite pointillée situe le débit corrigé de "
+     "référence évalué au point de croisière 500 t / 10 400 m / M_ECON.", False),
+    ("fig_sr_optima.svg", 6, "Vitesses optimales", "Portée spécifique et optima",
+     "SR(M) au point d'étude",
+     "Portée spécifique en fonction du nombre de Mach au point d'étude "
+     "(500 t, 10 400 m, CG 40 %, CI = 180), et position des trois vitesses "
+     "optimales.", False),
+    ("fig_cout_ci.svg", 7, "Vitesses optimales", "Décomposition du coût",
+     "carburant + temps = total",
+     "Le coût carburant est minimal au MRC, le coût du temps décroît avec la "
+     "vitesse, et leur somme est minimale au Mach économique.", False),
+    ("fig_sr_masses.svg", 8, "Vitesses optimales", "Influence de la masse",
+     "SR(M) pour quatre masses",
+     "Portée spécifique en fonction du Mach pour quatre masses (10 400 m, "
+     "CI = 180) et lieux des optima MRC, LRC et ECON — les trois optima "
+     "glissent vers les Mach élevés quand l'avion s'alourdit.", False),
+    ("fig_sr_altitudes.svg", 9, "Vitesses optimales", "Influence de l'altitude",
+     "SR(M) par niveau de vol",
+     "(a) courbes SR(M) à 500 t pour quatre niveaux de vol, points MRC "
+     "marqués ; (b) SR au Mach économique en fonction du niveau de vol, pour "
+     "trois masses.", False),
+    ("fig_econ_ci.svg", 10, "Vitesses optimales", "Effet du Cost Index",
+     "déplacement du Mach ECON",
+     "Déplacement du Mach ECON le long de la courbe SR(M) (500 t / 10 400 m) "
+     "quand le Cost Index passe de 0 à 500 kg/min.", False),
+    ("fig_trim_analyse.svg", 11, "Équilibrage", "Paramètres d'équilibre",
+     "α, δstab, F_N et W_F selon le Mach",
+     "Paramètres d'équilibre à 500 t en fonction du Mach, pour trois niveaux "
+     "de vol : incidence, calage du stabilisateur, poussée totale et débit "
+     "carburant.", True),
+    ("fig_cg.svg", 12, "Équilibrage", "Influence du centrage",
+     "CG de 30 à 45 % de la MAC",
+     "Effet de la position du centre de gravité sur l'équilibre "
+     "(500 t / 10 400 m / M_ECON) : calage du stabilisateur (haut) et débit "
+     "carburant d'équilibre (bas).", False),
+    ("fig_ek_route.svg", 13, "Vol EK215", "Itinéraire DXB → LAX",
+     "arc de grand cercle",
+     "Itinéraire du vol EK215, Dubaï (DXB) → Los Angeles (LAX) — arc de grand "
+     "cercle et contours géographiques des deux agglomérations (données "
+     "OpenStreetMap simplifiées).", False),
+    ("fig_ek215.svg", 14, "Vol EK215", "Zéro, un et deux step-climbs",
+     "profil, masse, carburant, bilan",
+     "Vol EK215 (croisière de 13 000 km, 500 t, M_ECON = 0,748) volé sans, avec "
+     "un et avec deux step-climbs : (a) profil vertical ; (b) évolution de la "
+     "masse ; (c) carburant cumulé ; (d) consommation totale et écart relatif "
+     "au vol direct.", True),
+    ("fig_thrust_altitude.svg", 15, "Vol EK215", "Poussée requise",
+     "F_N en palier selon l'altitude",
+     "Poussée requise en palier (quatre moteurs) en fonction de l'altitude au "
+     "Mach économique, pour les trois masses du scénario à deux montées. Les "
+     "cercles marquent l'altitude optimale : elle monte à mesure que l'avion "
+     "s'allège — c'est le mécanisme même du step-climb.", False),
+    ("fig_ek_moteur.svg", 16, "Vol EK215", "Régime moteur et débit",
+     "N₁ et W_F le long du vol",
+     "Régime moteur N₁ (haut) et débit carburant total (bas) le long du vol "
+     "EK215, pour les trois stratégies de paliers.", False),
+    ("fig_ek_mach.svg", 17, "Sensibilités", "Sensibilité au Mach",
+     "carburant selon le Mach de croisière",
+     "Carburant total du vol EK215 en fonction du Mach de croisière, pour les "
+     "trois stratégies de paliers.", False),
+    ("fig_ek_base.svg", 18, "Sensibilités", "Choix du palier initial",
+     "carburant selon le palier de départ",
+     "Carburant total du vol EK215 en fonction du palier initial de croisière "
+     "(échelle verticale resserrée : l'axe ne part pas de zéro).", False),
+    ("fig_ek_dh.svg", 19, "Sensibilités", "Amplitude des step-climbs",
+     "carburant selon Δh",
+     "Carburant total du vol EK215 en fonction de l'amplitude Δh d'un "
+     "step-climb (échelle verticale resserrée ; repère : 2 000 ft, séparation "
+     "RVSM).", False),
+    ("fig_ek_disa.svg", 20, "Sensibilités", "Sensibilité à la température",
+     "carburant selon ΔISA",
+     "Carburant total du vol EK215 en fonction de l'écart de température ΔISA "
+     "(échelle verticale resserrée).", False),
+    ("fig_ek_wind.svg", 21, "Sensibilités", "Influence du vent",
+     "carburant selon un vent longitudinal",
+     "Carburant total du vol EK215 en fonction d'un vent longitudinal constant "
+     "(V_W > 0 : vent arrière). Le gain des step-climbs reste stable quel que "
+     "soit le vent.", False),
+    ("fig_ek_emissions.svg", 22, "Émissions", "Écart au vol direct",
+     "carburant et quatre polluants",
+     "Écart relatif au vol direct du carburant et des quatre polluants, pour un "
+     "et deux step-climbs (vol EK215).", False),
+    ("fig_ek_emis_mach.svg", 23, "Émissions", "Polluants selon le Mach",
+     "NOx, CO, UHC et CO₂",
+     "Masses de polluants du vol EK215 en fonction du Mach de croisière, pour "
+     "les trois stratégies de paliers (repère : M_ECON).", False),
+    ("fig_ek_emis_base.svg", 24, "Émissions", "Polluants selon le palier",
+     "NOx, CO, UHC et CO₂",
+     "Masses de polluants du vol EK215 en fonction du palier initial, pour les "
+     "trois stratégies de paliers (repère : FL341).", False),
+    ("fig_ek_emis_alt.svg", 25, "Émissions", "Polluants selon l'altitude",
+     "large plage d'altitude de croisière",
+     "Masses de polluants du vol EK215 sur une large plage d'altitude de "
+     "croisière (au Mach économique), pour les trois stratégies de paliers.",
+     False),
+]
+FIG = {f[0]: f for f in FIGURES}
+FIG_PARTIES = ["Modélisation", "Équilibrage", "Vitesses optimales",
+               "Vol EK215", "Sensibilités", "Émissions"]
+
+
+_PRES_CSS = """
+<style>
+/* Barre de navigation du fil, collante sous le titre (même patron que les
+   barres de contrôles des pages Croisière et Trajectoire). */
+.st-key-pr_navbar {
+    position: sticky; top: 3.4rem; z-index: 30;
+    background: rgba(255,255,255,.66) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    backdrop-filter: blur(28px) saturate(180%);
+    border: .5px solid rgba(255,255,255,.7) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 1px 2px rgba(16,24,40,.04),
+                0 10px 30px rgba(16,24,40,.06) !important;
+    padding: .55rem .9rem !important; margin-bottom: 1.1rem; }
+/* Figure : image pleine largeur de sa carte, bornée pour les figures de
+   colonne (sinon un graphe 3,5 in projeté en 1400 px devient illisible). */
+.pr-fig { display:flex; justify-content:center; padding: 4px 0 2px; }
+.pr-fig img { width:100%; max-width:760px; height:auto; display:block; }
+.pr-fig.large img { max-width:100%; }
+.pr-cap { font-size:11.5px; color:#8B93A1; line-height:1.5; margin:8px 4px 0;
+    border-top:.5px solid rgba(60,60,67,.10); padding-top:8px; }
+.pr-cap b { color:#6E6E73; font-weight:600; }
+/* En-tête d'étape : surtitre, titre, chapô */
+.pr-eyebrow { display:inline-flex; align-items:center; gap:8px; padding:6px 12px;
+    border-radius:999px; background:color-mix(in srgb, var(--acc) 12%, white);
+    color:var(--acc); font-size:11.5px; font-weight:700; letter-spacing:.08em;
+    text-transform:uppercase; }
+.pr-title { font-size:27px; font-weight:650; letter-spacing:-.022em;
+    color:#1A2230; margin:12px 0 0; line-height:1.22; }
+.pr-lede { font-size:15px; color:#5B6573; line-height:1.6; max-width:78ch;
+    margin:9px 0 18px; }
+/* Frise « notre démarche » */
+.pr-flow { display:grid; grid-template-columns:repeat(5,1fr); gap:12px;
+    margin:4px 0 8px; }
+.pr-step { background:rgba(255,255,255,.72);
+    -webkit-backdrop-filter:blur(24px) saturate(180%);
+    backdrop-filter:blur(24px) saturate(180%);
+    border:.5px solid rgba(255,255,255,.75); border-radius:16px;
+    box-shadow:0 1px 2px rgba(16,24,40,.04), 0 10px 30px rgba(16,24,40,.06);
+    padding:16px 16px 15px; display:flex; flex-direction:column; gap:7px;
+    position:relative; }
+.pr-step .n { font-family:ui-monospace,"SF Mono",monospace; font-size:11px;
+    font-weight:600; color:var(--acc); letter-spacing:.04em; }
+.pr-step h4 { font-size:14.5px; font-weight:650; color:#1C1C1E; margin:0;
+    letter-spacing:-.01em; }
+.pr-step p { font-size:12px; color:#6E6E73; line-height:1.5; margin:0; }
+.pr-step .bar { position:absolute; left:16px; right:16px; top:0; height:3px;
+    border-radius:0 0 3px 3px; background:var(--acc); opacity:.85; }
+/* Cartes « nos choix » */
+.pr-choices { display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }
+.pr-choice { background:rgba(255,255,255,.72);
+    -webkit-backdrop-filter:blur(24px) saturate(180%);
+    backdrop-filter:blur(24px) saturate(180%);
+    border:.5px solid rgba(255,255,255,.75); border-radius:16px;
+    box-shadow:0 1px 2px rgba(16,24,40,.04), 0 10px 30px rgba(16,24,40,.06);
+    padding:17px 19px 16px; display:flex; flex-direction:column; gap:8px;
+    border-left:3px solid var(--acc); }
+.pr-choice .k { font-size:11px; font-weight:700; letter-spacing:.07em;
+    text-transform:uppercase; color:var(--acc); }
+.pr-choice h4 { font-size:15.5px; font-weight:650; color:#1C1C1E; margin:0;
+    letter-spacing:-.012em; }
+.pr-choice p { font-size:12.5px; color:#5B6573; line-height:1.55; margin:0; }
+/* Tableaux du rapport */
+.pr-tbl { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums;
+    margin-top:2px; }
+.pr-tbl th, .pr-tbl td { text-align:right; padding:9px 13px; font-size:13px; }
+.pr-tbl th { font-size:10.5px; font-weight:700; color:#8E8E93;
+    text-transform:uppercase; letter-spacing:.05em;
+    border-bottom:1px solid rgba(60,60,67,.18); }
+.pr-tbl th:first-child, .pr-tbl td:first-child { text-align:left; }
+.pr-tbl td { font-family:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
+    color:#3A3A3C; border-bottom:.5px solid rgba(60,60,67,.10); }
+.pr-tbl td:first-child { font-family:inherit; font-weight:600; color:#1C1C1E; }
+.pr-tbl tr:last-child td { border-bottom:none; }
+.pr-tbl tr.hl td { background:color-mix(in srgb, var(--acc) 8%, transparent); }
+.pr-tblcap { font-size:11.5px; color:#8B93A1; margin:9px 4px 0; }
+/* Points de bilan */
+.pr-bul { display:flex; flex-direction:column; gap:11px; margin:2px 0 0; }
+.pr-bul li { list-style:none; display:flex; gap:11px; align-items:flex-start;
+    font-size:13.5px; color:#3A3A3C; line-height:1.55; }
+.pr-bul li::before { content:""; flex:0 0 auto; width:7px; height:7px;
+    border-radius:50%; background:var(--acc); margin-top:7px; }
+@media (max-width:920px){
+    .pr-flow{ grid-template-columns:repeat(2,1fr);}
+    .pr-choices{ grid-template-columns:1fr;} }
+</style>
+"""
+
+
+def _pr_cardhead(titre, sub="", badge="", acc="#3634A3"):
+    """En-tête de carte, même patron que les pages module : titre et
+    sous-titre groupés à gauche, repère du rapport à droite."""
+    s = f'<span class="dash-chart-sub">{sub}</span>' if sub else ""
+    b = f'<span class="cur" style="--acc:{acc}">{badge}</span>' if badge else ""
+    st.markdown(f'<div class="dash-chart-head"><div>'
+                f'<span class="nm">{titre}</span>{s}</div>{b}</div>',
+                unsafe_allow_html=True)
+
+
+def _pr_fig(nom, acc, legende=True):
+    """Carte figure : en-tête (titre · sous-titre · n° du rapport), image,
+    légende. Dégrade proprement si le fichier n'a pas été généré."""
+    e = FIG.get(nom)
+    if e is None:
+        return
+    fichier, num, _partie, titre, sub, cap, large = e
+    with st.container(border=True):
+        _pr_cardhead(titre, sub, f"Fig. {num}", acc)
+        src = _fig_src(fichier)
+        if src is None:
+            st.warning(f"Figure absente : `rapport/figures/{fichier}` — "
+                       "lancer `python rapport/figures/make_figures.py`.",
+                       icon="⚠️")
+            return
+        cls = "pr-fig large" if large else "pr-fig"
+        st.markdown(f'<div class="{cls}"><img src="{src}" alt="{titre}"></div>',
+                    unsafe_allow_html=True)
+        if legende:
+            st.markdown(f'<p class="pr-cap"><b>Fig. {num}</b> — {cap}</p>',
+                        unsafe_allow_html=True)
+
+
+def _pr_figs(noms, acc, par=2):
+    """Plusieurs figures en grille (les figures pleine largeur restent seules)."""
+    reste = list(noms)
+    while reste:
+        if FIG.get(reste[0], (None,) * 7)[6]:      # figure pleine largeur
+            _pr_fig(reste.pop(0), acc)
+            continue
+        lot, reste = reste[:par], reste[par:]
+        for col, nom in zip(st.columns(len(lot)), lot):
+            with col:
+                _pr_fig(nom, acc)
+
+
+def _pr_tbl(entetes, lignes, cap="", acc="#3634A3", hl=None):
+    """Tableau façon rapport — hl = index (0-based) de la ligne à surligner."""
+    th = "".join(f"<th>{h}</th>" for h in entetes)
+    tr = ""
+    for i, ligne in enumerate(lignes):
+        cls = ' class="hl"' if hl is not None and i == hl else ""
+        tr += f"<tr{cls}>" + "".join(f"<td>{c}</td>" for c in ligne) + "</tr>"
+    c = f'<p class="pr-tblcap">{cap}</p>' if cap else ""
+    st.markdown(f'<table class="pr-tbl" style="--acc:{acc}"><thead><tr>{th}'
+                f'</tr></thead><tbody>{tr}</tbody></table>{c}',
+                unsafe_allow_html=True)
+
+
+def _pr_segm(label, options, key, **kw):
+    """Contrôle segmenté qui ne peut pas rester vide.
+
+    Nativement, recliquer l'option active la désélectionne (valeur None) — ce
+    qui viderait la page en pleine présentation. On rétablit alors la dernière
+    valeur, depuis un callback (seul endroit où réécrire la clé d'un widget est
+    permis)."""
+    st.session_state.setdefault(key, options[0])
+    st.session_state.setdefault(f"_{key}_prec", st.session_state[key])
+
+    def _garder():
+        if st.session_state.get(key) is None:
+            st.session_state[key] = st.session_state[f"_{key}_prec"]
+        st.session_state[f"_{key}_prec"] = st.session_state[key]
+
+    st.segmented_control(label, options, key=key, on_change=_garder, **kw)
+    return st.session_state[key]
+
+
+def _sg(x, dec=1, unite=""):
+    """Nombre signé au vrai signe moins typographique (− et non le tiret) ;
+    zéro sans signe."""
+    signe = "−" if x < 0 else ("+" if x > 0 else "")
+    return f"{signe}{abs(x):.{dec}f}{unite}"
+
+
+def _pr_head(eyebrow, titre, lede, acc):
+    st.markdown(f'<div style="--acc:{acc}">'
+                f'<span class="pr-eyebrow">{eyebrow}</span>'
+                f'<h2 class="pr-title">{titre}</h2>'
+                f'<p class="pr-lede">{lede}</p></div>', unsafe_allow_html=True)
+
+
+# ── Les huit étapes du fil ─────────────────────────────────────────────────
+# Signature commune : (accent foncé, accent vif, chiffres de valeurs.json).
+
+def _pr_contexte(acc_d, acc_v, v):
+    _pr_head("MGA803 · ÉTS · Été 2026",
+             "Modéliser la croisière d'un A380, de bout en bout",
+             "Reconstruire toute la chaîne des performances — atmosphère, "
+             "vitesses, aérodynamique, propulsion, équilibrage — puis s'en "
+             "servir pour optimiser une mission longue distance réelle : le vol "
+             "Emirates EK215, Dubaï → Los Angeles.", acc_d)
+
+    ek = v["ek215"]
+    st.markdown(
+        '<div class="dash-kpi-grid" style="grid-template-columns:repeat(4,1fr)">'
+        + _dash_kpi("Modules", "7", "", "de l'atmosphère à la trajectoire",
+                    tag="modélisation", acc=acc_d)
+        + _dash_kpi("Masse d'étude", "500", "t", "centrage à 40 % de la MAC",
+                    tag="point d'étude", acc=acc_d)
+        + _dash_kpi("Croisière étudiée", f"{fr(13000)}", "km",
+                    "Dubaï (DXB) → Los Angeles (LAX)", tag="EK215", acc=acc_d)
+        + _dash_kpi("Carburant économisé",
+                    _sg(ek['2']['delta_fuel_pct']), "%",
+                    f"{ek['0']['fuel_t'] - ek['2']['fuel_t']:.1f} t avec deux "
+                    "step-climbs", tag="résultat", hl=True, acc=acc_d)
+        + '</div>', unsafe_allow_html=True)
+
+    _pr_fig("png/fig_geometry.png", acc_d)
+
+
+def _pr_demarche(acc_d, acc_v, v):
+    _pr_head("Notre démarche", "Cinq temps, du module isolé à la mission",
+             "Chaque brique a été construite et vérifiée seule avant d'être "
+             "chaînée à la suivante. Cette application est le banc d'essai qui "
+             "a servi tout au long du projet — c'est elle que vous voyez.",
+             acc_d)
+
+    etapes = [
+        ("01", "Modélisation",
+         "Cinq briques indépendantes : ISA, conversions de vitesses, "
+         "aérodynamique OpenVSP, propulsion et émissions OACI."),
+        ("02", "Équilibrage",
+         "L'algorithme de trim referme le système : α, δstab et F_N en palier, "
+         "puis l'inversion vers N₁ et le débit carburant."),
+        ("03", "Vitesses optimales",
+         "Balayage du Mach puis raffinage par optimiseur → les trois régimes "
+         "MRC, LRC et ECON."),
+        ("04", "Vol EK215",
+         "Intégration pas à pas de la croisière Dubaï → Los Angeles, sans, avec "
+         "un et avec deux step-climbs."),
+        ("05", "Raffinements",
+         "Sensibilités (Mach, palier, Δh, ΔISA, vent), Mach ECON adaptatif et "
+         "bilan des émissions."),
+    ]
+    cartes = "".join(
+        f'<div class="pr-step" style="--acc:{acc_v}"><span class="bar"></span>'
+        f'<span class="n">{n}</span><h4>{t}</h4><p>{d}</p></div>'
+        for n, t, d in etapes)
+    st.markdown(f'<div class="pr-flow">{cartes}</div>', unsafe_allow_html=True)
+
+    st.markdown("")
+    _pr_figs(["fig_atm.svg", "fig_polaire.svg"], acc_d)
+
+
+def _pr_choix(acc_d, acc_v, v):
+    _pr_head("Nos choix", "Quatre décisions assumées",
+             "Le modèle laisse plusieurs portes ouvertes. Voici celles que nous "
+             "avons franchies, et pourquoi.", acc_d)
+
+    choix = [
+        ("01", "Chaîne moteur en grandeurs corrigées",
+         "L'inversion du régime N₁ et le débit carburant travaillent sur les "
+         "polynômes <b>corrigés</b> (poussée × δ, retrait du lapse δ√θ). "
+         "Surtout, un seul et même débit alimente la consommation et le calcul "
+         "d'émissions : c'est cette cohérence qui place le point de croisière "
+         "dans la plage résolue de la courbe LTO."),
+        ("02", "Cost Index à 180 kg/min",
+         "EK215 est un vol premium de plus de 16 h : le temps y a une valeur "
+         "réelle. Le CI est choisi dans la plage [165, 200] et tenu identique "
+         "dans toute l'étude, ce qui fixe le Mach économique à "
+         f"<b>{v['validation']['ECON']['mach']:.3f}</b>."),
+        ("03", "La croisière seule, 13 000 km",
+         "L'énoncé ne modélise que la croisière : des ~13 400 km du grand "
+         "cercle DXB → LAX, on retire la montée (~250 km) et la descente "
+         "(~200 km). Les step-climbs sont supposés instantanés, et le pas "
+         "d'intégration est de 25 NM."),
+        ("04", "Vérifié de l'intérieur",
+         "Aucune valeur extérieure à recopier : on contrôle les propriétés que "
+         "le modèle <b>doit</b> avoir — ECON(CI = 0) ≡ MRC, LRC &gt; MRC, "
+         "CO₂ = 3,16 × carburant, ordres de grandeur du Trent 970 — et la "
+         "cohérence entre modules."),
+    ]
+    cartes = "".join(
+        f'<div class="pr-choice" style="--acc:{acc_v}"><span class="k">'
+        f'Choix {n}</span><h4>{t}</h4><p>{d}</p></div>' for n, t, d in choix)
+    st.markdown(f'<div class="pr-choices">{cartes}</div>',
+                unsafe_allow_html=True)
+
+
+def _pr_trim(acc_d, acc_v, v):
+    t = v["trim_vitrine"]
+    _pr_head("Équilibrage", "Le point fixe converge en cinq itérations",
+             "À masse, altitude et Mach donnés, l'algorithme cherche le triplet "
+             "(α, δstab, F_N) qui annule simultanément portance, traînée et "
+             "moment de tangage. Point d'étude : 500 t, 10 400 m, "
+             "M_ECON.", acc_d)
+
+    st.markdown(
+        '<div class="dash-kpi-grid" style="grid-template-columns:repeat(5,1fr)">'
+        + _dash_kpi("Incidence", f"{t['alpha']:.2f}", "°", "α d'équilibre",
+                    tag="α", acc=acc_d)
+        + _dash_kpi("Stabilisateur", _sg(t['dstab'], 2), "°",
+                    "calage δstab", tag="δstab", acc=acc_d)
+        + _dash_kpi("Poussée totale", f"{t['FN_kN']:.1f}", "kN",
+                    "quatre moteurs", tag="F_N", acc=acc_d)
+        + _dash_kpi("Régime moteur", f"{t['N1']:.1f}", "%",
+                    f"débit {fr(t['WF_total_kgh'])} kg/h", tag="N₁", acc=acc_d)
+        + _dash_kpi("Convergence", f"{t['iterations']}", "it.",
+                    f"finesse L/D = {t['finesse']:.1f}", tag="point fixe",
+                    hl=True, acc=acc_d)
+        + '</div>', unsafe_allow_html=True)
+
+    def _e(x):
+        """Écart de convergence : notation scientifique hors de la plage où le
+        décimal reste lisible (1 ≤ x < 100)."""
+        if x is None:
+            return "—"
+        if x == 0:
+            return "0"
+        if 1.0 <= abs(x) < 100.0:
+            return f"{x:.1f}"
+        e = int(np.floor(np.log10(abs(x))))
+        exp = str(e).replace("-", "−")
+        return f"{x / 10.0 ** e:.1f}·10<sup>{exp}</sup>"
+
+    with st.container(border=True):
+        _pr_cardhead("Convergence du trim",
+                     "500 t / 10 400 m / M_ECON — critères : |Δα| &lt; 10⁻³ °, "
+                     "|ΔF_N| &lt; 10 N", "Tableau IV", acc_d)
+        lignes = [(h["it"], f"{h['alpha']:.3f}", _sg(h["dstab"], 3),
+                   f"{h['FN_kN']:.1f}", _e(h["d_alpha"]), _e(h["d_FN"]))
+                  for h in t["history"]]
+        _pr_tbl(["Itération", "α [°]", "δstab [°]", "F_N [kN]",
+                 "|Δα| [°]", "|ΔF_N| [N]"], lignes,
+                cap="L'itération 0 est l'estimé initial (α = δstab = 0, "
+                    "F_N = 40 % de la poussée maximale statique).",
+                acc=acc_d, hl=len(lignes) - 1)
+
+    _pr_fig("fig_trim_analyse.svg", acc_d)
+    _pr_fig("fig_cg.svg", acc_d)
+
+
+def _pr_vitesses(acc_d, acc_v, v):
+    val = v["validation"]
+    _pr_head("Vitesses optimales", "MRC, LRC et ECON au point d'étude",
+             "La portée spécifique SR = TAS / W_F mesure la distance parcourue "
+             "par kilogramme de carburant. Son maximum donne le MRC ; le LRC "
+             "est le point à 99 % du maximum, côté rapide ; l'ECON minimise le "
+             "coût par distance, carburant et temps combinés.", acc_d)
+
+    cols = {"MRC": acc_d, "LRC": acc_v, "ECON": "#FF375F"}
+    kpis = ""
+    for nom, col in cols.items():
+        d = val[nom]
+        sw = f'<span class="kpi-swatch" style="background:{col}"></span>{nom}'
+        kpis += _dash_kpi(sw, f"{d['mach']:.3f}", "Mach",
+                          f"{d['tas_kt']:.0f} kt · L/D {d['finesse']:.1f}",
+                          tag={"MRC": "portée maximale",
+                               "LRC": "long range",
+                               "ECON": "coût minimal"}[nom],
+                          hl=(nom == "ECON"), acc=acc_d)
+    kpis += _dash_kpi("Portée spécifique max",
+                      f"{val['sr_max_nm_per_kg']:.4f}", "NM/kg",
+                      "au Mach MRC", tag="SR max", acc=acc_d)
+    st.markdown('<div class="dash-kpi-grid" style="grid-template-columns:'
+                f'repeat(4,1fr)">{kpis}</div>', unsafe_allow_html=True)
+
+    with st.container(border=True):
+        _pr_cardhead("Vitesses optimales",
+                     "500 t / 10 400 m / CG 40 % / CI = 180 kg/min",
+                     "Tableau II", acc_d)
+        lignes = [(f'<span class="kpi-swatch" style="background:{cols[n]}">'
+                   f'</span>{n}', f"{val[n]['mach']:.3f}",
+                   f"{val[n]['tas_kt']:.0f}", fr(val[n]['wf_kgh']),
+                   f"{val[n]['sr_nm_per_kg']:.4f}", f"{val[n]['finesse']:.1f}")
+                  for n in cols]
+        _pr_tbl(["Régime", "Mach", "TAS [kt]", "W_F [kg/h]", "SR [NM/kg]",
+                 "L/D"], lignes, acc=acc_d, hl=2)
+
+    _pr_figs(["fig_sr_optima.svg", "fig_cout_ci.svg"], acc_d)
+    _pr_figs(["fig_sr_masses.svg", "fig_sr_altitudes.svg", "fig_econ_ci.svg"],
+             acc_d)
+
+
+def _pr_ek_vol(acc_d, acc_v, v):
+    _pr_head("Étude de cas", "Emirates EK215 · Dubaï → Los Angeles",
+             "Un des plus longs vols d'A380 en service : ~13 400 km de grand "
+             "cercle, plus de 16 h de croisière. C'est la mission sur laquelle "
+             "le modèle complet est mis à l'épreuve.", acc_d)
+
+    ek = v["ek215"]
+    st.markdown(
+        '<div class="dash-kpi-grid" style="grid-template-columns:repeat(4,1fr)">'
+        + _dash_kpi("Distance de croisière", fr(13000), "km",
+                    "montée et descente retirées", tag="mission", acc=acc_d)
+        + _dash_kpi("Masse au début", "500", "t", "centrage 40 % de la MAC",
+                    tag="configuration", acc=acc_d)
+        + _dash_kpi("Palier initial", "FL341", "",
+                    "10 400 m · step-climbs de 2 000 ft", tag="profil",
+                    acc=acc_d)
+        + _dash_kpi("Temps de croisière", f"{ek['0']['time_h']:.1f}", "h",
+                    "au Mach économique 0.748", tag="vol direct", acc=acc_d)
+        + '</div>', unsafe_allow_html=True)
+
+    c = st.columns([1.15, 1])
+    with c[0]:
+        _pr_fig("fig_ek_route.svg", acc_d)
+    with c[1], st.container(border=True):
+        _pr_cardhead("Paramètres de la trajectoire",
+                     "configuration retenue pour toute l'étude",
+                     "Tableau III", acc_d)
+        val = v["validation"]
+        _pr_tbl(["Paramètre", "Valeur"], [
+            ("Distance de croisière", f"{fr(13000)} km"),
+            ("Altitude de base", "10 400 m (FL341)"),
+            ("Masse initiale", "500 000 kg"),
+            ("Position du CG", "40 % MAC"),
+            ("M_MRC", f"{val['MRC']['mach']:.3f}"),
+            ("M_LRC", f"{val['LRC']['mach']:.3f}"),
+            ("M_ECON (CI = 180)", f"{val['ECON']['mach']:.3f}"),
+            ("Amplitude Δh", "2 000 ft (RVSM)"),
+        ], acc=acc_d, hl=6)
+
+
+def _pr_ek_res(acc_d, acc_v, v):
+    ek = v["ek215"]
+    gain2 = ek["0"]["fuel_t"] - ek["2"]["fuel_t"]
+    _pr_head("Étude de cas · résultats",
+             f"Deux montées suffisent à effacer {gain2:.1f} tonnes de carburant",
+             "À masse et Mach identiques, seul le profil vertical change. "
+             "L'avion s'allège en volant : monter d'un palier le remet près de "
+             "son altitude optimale, où la portée spécifique est meilleure.",
+             acc_d)
+
+    C_DIR = "#8E8E93"
+    def _kpi(k, lab, tag, sw, hl=False):
+        d = ek[str(k)]
+        sl = f'<span class="kpi-swatch" style="background:{sw}"></span>{lab}'
+        if k == 0:
+            desc = f"{d['time_h']:.2f} h · FL341"
+        else:
+            dt = ek["0"]["fuel_t"] - d["fuel_t"]
+            desc = (f"gain {dt:.1f} t · {_sg(d['delta_fuel_pct'], 1, ' %')} · "
+                    f"+{d['delta_time_min']:.1f} min")
+        return _dash_kpi(sl, f"{d['fuel_t']:.1f}", "t carb.", desc, tag=tag,
+                         hl=hl, acc=acc_d)
+
+    co2 = (ek["0"]["emissions_kg"]["CO2"] - ek["2"]["emissions_kg"]["CO2"]) / 1000.0
+    st.markdown(
+        '<div class="dash-kpi-grid" style="grid-template-columns:repeat(4,1fr)">'
+        + _kpi(0, "Direct", "sans step-climb", C_DIR)
+        + _kpi(1, "1 step-climb", "FL341 → 361", acc_v)
+        + _kpi(2, "2 step-climbs", "FL341 → 361 → 381", acc_d, hl=True)
+        + _dash_kpi("CO₂ évité", f"{co2:.1f}", "t",
+                    "deux step-climbs vs vol direct", tag="émissions",
+                    acc=acc_d)
+        + '</div>', unsafe_allow_html=True)
+
+    _pr_fig("fig_ek215.svg", acc_d)
+
+    with st.container(border=True):
+        _pr_cardhead("Bilan des trois stratégies",
+                     "13 000 km · 500 t · M_ECON = 0.748", "Tableau V", acc_d)
+        e = [ek["0"], ek["1"], ek["2"]]
+        pct = lambda f: ("—" if f is e[0] else _sg(f['delta_fuel_pct'], 1, " %"))
+        dmin = lambda f: ("—" if f is e[0] else f"+{f['delta_time_min']:.1f}")
+        _pr_tbl(["", "Direct", "1 step", "2 steps"], [
+            ("Paliers", "FL341", "FL341/361", "FL341/361/381"),
+            ("Temps de croisière [h]", *[f"{x['time_h']:.2f}" for x in e]),
+            ("Δ temps [min]", *[dmin(x) for x in e]),
+            ("Carburant [t]", *[f"{x['fuel_t']:.1f}" for x in e]),
+            ("Δ carburant", *[pct(x) for x in e]),
+            ("CO₂ [t]", *[f"{x['emissions_kg']['CO2'] / 1000:.1f}" for x in e]),
+            ("NOx [kg]", *[f"{x['emissions_kg']['NOx']:.0f}" for x in e]),
+            ("CO [kg]", *[f"{x['emissions_kg']['CO']:.1f}" for x in e]),
+            ("UHC [kg]", *[f"{x['emissions_kg']['UHC']:.2f}" for x in e]),
+        ], acc=acc_d, hl=3)
+
+    _pr_figs(["fig_thrust_altitude.svg", "fig_ek_moteur.svg"], acc_d)
+
+
+def _pr_bilan(acc_d, acc_v, v):
+    ek = v["ek215"]
+    e0, e2 = ek["0"]["emissions_kg"], ek["2"]["emissions_kg"]
+    ec = lambda k: (e2[k] - e0[k]) / e0[k] * 100.0
+
+    _pr_head("Émissions & bilan", "Le carburant baisse, mais pas tous les rejets",
+             "Les indices d'émission sont évalués au régime moteur d'équilibre "
+             "par la méthode Boeing Fuel Flow, puis multipliés par le carburant "
+             "réellement brûlé. Ce qui suit le carburant descend ; ce qui "
+             "dépend du régime moteur, non.", acc_d)
+
+    st.markdown(
+        '<div class="dash-kpi-grid" style="grid-template-columns:repeat(4,1fr)">'
+        + _dash_kpi("CO₂", _sg(ec('CO2')), "%",
+                    f"{(e0['CO2'] - e2['CO2']) / 1000:.1f} t évitées",
+                    tag="proportionnel au carburant", hl=True, acc=acc_d)
+        + _dash_kpi("NOx", _sg(ec('NOx')), "%",
+                    f"{e2['NOx']:.0f} kg au total", tag="baisse davantage",
+                    acc=acc_d)
+        + _dash_kpi("CO", _sg(ec('CO')), "%",
+                    f"{e2['CO']:.0f} kg au total", tag="quasi inchangé",
+                    acc=acc_d)
+        + _dash_kpi("UHC", _sg(ec('UHC')), "%",
+                    f"{e2['UHC']:.1f} kg au total", tag="quasi inchangé",
+                    acc=acc_d)
+        + '</div>', unsafe_allow_html=True)
+
+    _pr_figs(["fig_ek_emissions.svg", "fig_ek_emis_base.svg"], acc_d)
+
+    lit = v.get("ek_litterature", {})
+    points = [
+        "Le modèle complet tient debout de bout en bout : de l'atmosphère ISA "
+        "au bilan d'émissions d'une mission de 16 h, chaque grandeur reste dans "
+        "les ordres de grandeur attendus d'un A380 équipé de Trent 970.",
+        f"Deux step-climbs de 2 000 ft font gagner "
+        f"<b>{ek['0']['fuel_t'] - ek['2']['fuel_t']:.1f} t de carburant "
+        f"({_sg(ek['2']['delta_fuel_pct'], 1, ' %')})</b> pour "
+        f"{ek['2']['delta_time_min']:.1f} minutes de vol en plus — un compromis "
+        "très favorable dès que le carburant compte.",
+        "Le gain vient d'un mécanisme simple : l'altitude optimale monte à "
+        "mesure que l'avion s'allège, et l'escalier la suit au lieu de s'en "
+        "éloigner. Il résiste au vent, à la température et au choix du palier "
+        "initial.",
+        "Les polluants ne suivent pas tous : CO₂ et NOx descendent avec le "
+        "carburant, tandis que CO et UHC restent stables — ils dépendent du "
+        "régime moteur, qui remonte à chaque montée.",
+    ]
+    if lit:
+        points.append(
+            f"Ramenée au passager, la consommation vaut "
+            f"<b>{lit['kg_per_seat_km']:.4f} kg/siège·km</b> à M 0,85 "
+            f"({lit['seats']:.0f} sièges) — sous la fourchette publiée pour "
+            "l'A380 en service, ce qui est cohérent avec un modèle de croisière "
+            "pure, sans montée ni descente.")
+    st.markdown(f'<ul class="pr-bul" style="--acc:{acc_v}">'
+                + "".join(f"<li>{p}</li>" for p in points) + "</ul>",
+                unsafe_allow_html=True)
+
+
+# Étapes du fil de soutenance (libellés de la barre de navigation)
+PR_ETAPES = ["Contexte", "Démarche", "Nos choix", "Équilibrage",
+             "Vitesses optimales", "EK215 · le vol", "EK215 · résultats",
+             "Émissions & bilan"]
+
+_PR_FIL = dict(zip(PR_ETAPES, [_pr_contexte, _pr_demarche, _pr_choix, _pr_trim,
+                               _pr_vitesses, _pr_ek_vol, _pr_ek_res,
+                               _pr_bilan]))
+
+
+def _pr_galerie(acc_d, acc_v, v):
+    """Toutes les figures du rapport, groupées par partie — réserve pour les
+    questions. Une seule partie est rendue à la fois (les images sont
+    embarquées en base64 : tout afficher alourdirait la page pour rien)."""
+    partie = _pr_segm("Partie", FIG_PARTIES + ["Tableaux"], "pr_partie",
+                      label_visibility="collapsed")
+
+    if partie != "Tableaux":
+        noms = [f[0] for f in FIGURES if f[2] == partie]
+        st.caption(f"{len(noms)} figure(s) — partie « {partie} » du rapport")
+        _pr_figs(noms, acc_d)
+        return
+
+    # ── Tableaux : les quatre du rapport + les compléments de la revue ──────
+    _pr_vitesses_tbl(acc_d, v)
+
+
+def _pr_vitesses_tbl(acc_d, v):
+    """Tableaux du rapport rassemblés (galerie)."""
+    val, ek = v["validation"], v["ek215"]
+
+    with st.container(border=True):
+        _pr_cardhead("Vitesses optimales",
+                     "500 t / 10 400 m / CG 40 % / CI = 180", "Tableau II",
+                     acc_d)
+        _pr_tbl(["Régime", "Mach", "TAS [kt]", "W_F [kg/h]", "SR [NM/kg]", "L/D"],
+                [(n, f"{val[n]['mach']:.3f}", f"{val[n]['tas_kt']:.0f}",
+                  fr(val[n]['wf_kgh']), f"{val[n]['sr_nm_per_kg']:.4f}",
+                  f"{val[n]['finesse']:.1f}") for n in ("MRC", "LRC", "ECON")],
+                acc=acc_d, hl=2)
+
+    c = st.columns(2)
+    with c[0], st.container(border=True):
+        _pr_cardhead("Mach ECON par masse",
+                     "10 400 m · CI = 180 — les optima glissent avec la masse",
+                     acc=acc_d)
+        mm = v["multi_masses"]
+        _pr_tbl(["Masse [t]", "MRC", "LRC", "ECON"],
+                [(m, f"{mm[m]['MRC']:.3f}", f"{mm[m]['LRC']:.3f}",
+                  f"{mm[m]['ECON']:.3f}") for m in sorted(mm, key=int)],
+                acc=acc_d)
+    with c[1], st.container(border=True):
+        _pr_cardhead("Mach ECON par Cost Index",
+                     "500 t / 10 400 m — CI = 0 redonne bien le MRC",
+                     acc=acc_d)
+        ci = v["econ_vs_ci"]
+        _pr_tbl(["CI [kg/min]", "Mach ECON"],
+                [(c_, f"{ci[c_]:.3f}") for c_ in sorted(ci, key=int)],
+                acc=acc_d, hl=sorted(ci, key=int).index("180"))
+
+    with st.container(border=True):
+        _pr_cardhead("Vol EK215 — bilan des trois stratégies",
+                     "13 000 km · 500 t · M_ECON = 0.748", "Tableau V", acc_d)
+        e = [ek["0"], ek["1"], ek["2"]]
+        _pr_tbl(["", "Direct", "1 step", "2 steps"], [
+            ("Temps [h]", *[f"{x['time_h']:.2f}" for x in e]),
+            ("Carburant [t]", *[f"{x['fuel_t']:.1f}" for x in e]),
+            ("Δ carburant", "—", _sg(e[1]['delta_fuel_pct'], 1, " %"),
+             _sg(e[2]['delta_fuel_pct'], 1, " %")),
+            ("CO₂ [t]", *[f"{x['emissions_kg']['CO2'] / 1000:.1f}" for x in e]),
+            ("NOx [kg]", *[f"{x['emissions_kg']['NOx']:.0f}" for x in e]),
+            ("CO [kg]", *[f"{x['emissions_kg']['CO']:.1f}" for x in e]),
+            ("UHC [kg]", *[f"{x['emissions_kg']['UHC']:.2f}" for x in e]),
+        ], acc=acc_d, hl=1)
+
+    ad = v.get("ek_econ_adaptatif")
+    if ad:
+        with st.container(border=True):
+            _pr_cardhead("Mach économique adaptatif",
+                         "Mach ECON recalculé au début de chaque palier — la "
+                         "comparaison se fait en coût, pas en carburant",
+                         "Tableau VI", acc_d)
+            _pr_tbl(["Stratégie", "Machs", "Carburant [t]", "Temps [h]",
+                     "Coût [t équiv.]"],
+                    [(f"{k} step" + ("s" if k != "1" else "") if k != "0"
+                      else "Direct",
+                      " · ".join(f"{m:.3f}" for m in ad[k]["machs"]),
+                      f"{ad[k]['fuel_t']:.1f}", f"{ad[k]['time_h']:.2f}",
+                      f"{ad[k]['cost_t']:.1f}") for k in ("0", "1", "2")],
+                    cap="Le Mach ECON monte avec l'altitude : le carburant "
+                        "augmente légèrement, mais le temps gagné fait baisser "
+                        "le coût total.", acc=acc_d, hl=2)
+
+
+def page_present():
+    """Support de soutenance : le fil narratif (8 étapes) et la galerie
+    complète des figures et tableaux du rapport."""
+    acc_d, acc_v = ACCENTS["Présentation"]
+    st.markdown(_DASH_CSS + _PRES_CSS, unsafe_allow_html=True)
+
+    st.markdown('<div style="text-align:right;margin-bottom:.3rem">'
+                '<span class="perf-modpill" style="background:rgba(94,92,230,.12);'
+                'color:#3634A3"><span class="dot" style="background:#5E5CE6;'
+                'box-shadow:0 0 0 4px rgba(94,92,230,.18)"></span>'
+                'Présentation · Soutenance</span></div>', unsafe_allow_html=True)
+    page_head("Présentation",
+              "Les figures et les tableaux du rapport, dans l'ordre où on les "
+              "raconte — puis la galerie complète, en réserve pour les questions",
+              accent=acc_v)
+
+    vals = charger_valeurs()
+    if vals is None:
+        st.info("**Chiffres indisponibles.** `rapport/figures/valeurs.json` est "
+                "absent — lancer `python rapport/figures/make_figures.py` pour "
+                "générer les figures et les valeurs du rapport.", icon="📄")
+        return
+
+    # ── Barre de navigation : mode, étape courante, boutons ‹ › ─────────────
+    def _bouger(d):
+        """Étape précédente / suivante, en boucle. Callback : écrire la clé du
+        widget d'étape y est permis, et le contrôle segmenté suit."""
+        i = PR_ETAPES.index(st.session_state["pr_etape"])
+        e = PR_ETAPES[(i + d) % len(PR_ETAPES)]
+        st.session_state["pr_etape"] = e
+        st.session_state["_pr_etape_prec"] = e
+
+    with st.container(border=True, key="pr_navbar"):
+        mode = _pr_segm("Mode", ["Fil de soutenance", "Toutes les figures"],
+                        "pr_mode", label_visibility="collapsed")
+        if mode == "Fil de soutenance":
+            c = st.columns([1, 14, 1], vertical_alignment="center")
+            c[0].button("‹", key="pr_prev", on_click=_bouger, args=(-1,),
+                        width="stretch", help="Étape précédente")
+            with c[1]:
+                etape = _pr_segm(
+                    "Étape", PR_ETAPES, "pr_etape",
+                    format_func=lambda e: f"{PR_ETAPES.index(e) + 1} · {e}",
+                    label_visibility="collapsed")
+            c[2].button("›", key="pr_next", on_click=_bouger, args=(1,),
+                        width="stretch", help="Étape suivante")
+
+    if mode == "Toutes les figures":
+        _pr_galerie(acc_d, acc_v, vals)
+        return
+
+    _PR_FIL[etape](acc_d, acc_v, vals)
+
 
 PAGES = {
     "Accueil": page_accueil,
+    "Présentation": page_present,
     "Atmosphère": page_atm,
     "Conversion": page_conv,
     "Aérodynamique": page_aero,
@@ -2636,6 +3489,13 @@ def apply_page_background():
                 "transparent 55%), radial-gradient(90% 60% at 0% 0%, "
                 "rgba(44,199,192,.06), transparent 50%), linear-gradient(180deg, "
                 "#EAF5F4 0%, #F1F5F5 40%, #EFF1F4 100%)")
+    elif nav == "Présentation":
+        # Support de soutenance : fond INDIGO discret (deux halos + dégradé
+        # lavande → bleuté), accordé à l'accent de la page.
+        fond = ("radial-gradient(120% 80% at 80% -12%, rgba(94,92,230,.13), "
+                "transparent 55%), radial-gradient(90% 60% at 0% 0%, "
+                "rgba(94,92,230,.06), transparent 50%), linear-gradient(180deg, "
+                "#F0EFFA 0%, #F2F3F9 40%, #EFF1F4 100%)")
     else:
         vif = ACCENTS.get(nav, (NAVY, "#3E6B99"))[1]
         fond = (f"radial-gradient(120% 80% at 78% -10%, {vif}1A, transparent 55%), "
@@ -2664,6 +3524,8 @@ def apply_page_background():
 _NAV_ICONS = {
     "Accueil": ('<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'
                 '<path d="M9 22V12h6v10"/>', "#9FB1CB"),
+    "Présentation": ('<path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 '
+                     '0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/>', "#8B89F0"),
     "Atmosphère": ('<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
                    "#5AC8FA"),
     "Conversion": ('<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/>'
@@ -2819,10 +3681,11 @@ st.sidebar.markdown(
     '<div class="fm"><span class="pip"></span>ÉTS · É2026</div></div>',
     unsafe_allow_html=True)
 
-# Réduit le ruban gauche dans un module ; reste déroulé à l'Accueil et sur la
-# page Performance croisière (maquette « Croisière & Coût » : pas de volet droit,
-# contrôles en barre horizontale → le ruban gauche se déroule en grand).
-if choix_page not in ("Accueil", "Performance croisière", "Trajectoire"):
+# Réduit le ruban gauche dans un module ; reste déroulé à l'Accueil et sur les
+# pages sans volet de droite (Croisière, Trajectoire, Présentation : contrôles en
+# barre horizontale → le ruban gauche se déroule en grand).
+if choix_page not in ("Accueil", "Performance croisière", "Trajectoire",
+                      "Présentation"):
     st.markdown(_RAIL_CSS, unsafe_allow_html=True)
 
 PAGES[choix_page]()

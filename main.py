@@ -1011,12 +1011,13 @@ def print_traj_menu():
     print("  décroît) et les émissions OACI. Step-climbs INSTANTANÉS (saut d'alt.).")
     print()
     print("  compare --mass <kg> --dist <km> --mach <M> --base <ft>")
-    print("          [--step <ft>] [--disa <v>] [--xcg <f>] [--ds <km>]")
+    print("          [--step <ft>] [--disa <v>] [--xcg <f>] [--ds <km>] [--vent <kt>]")
     print("          Compare la MÊME trajectoire sans / avec 1 / avec 2 step-climbs")
     print("          --base  : altitude du 1ᵉʳ palier [ft]")
     print("          --step  : amplitude d'un step-climb [ft] (défaut 2000)")
-    print("          --dist  : distance de croisière [km]")
+    print("          --dist  : distance de croisière (sol) [km]")
     print("          --ds    : pas d'intégration [km] (défaut 25 NM ≈ 46 km)")
+    print("          --vent  : vent longitudinal [kt], >0 = arrière (défaut 0)")
     print()
     print("  Exemple :  compare --mass 500000 --dist 12000 --mach 0.82 --base 31000")
     print()
@@ -1041,6 +1042,7 @@ def _build_traj_parser():
     p.add_argument("--xcg",  type=float, default=0.40, metavar="FRAC")
     p.add_argument("--ds",   type=float, default=mod_traj.SUBSTEP_DEFAUT / 1000.0,
                    metavar="KM")
+    p.add_argument("--vent", type=float, default=0.0, metavar="KT")
     return parser
 
 
@@ -1052,7 +1054,7 @@ def _print_traj_result(cas, args):
           f"dist = {args.dist:.0f} km   M{args.mach:.3f}")
     print(f"  Palier de base FL{int(round(args.base/100)):03d}   "
           f"step-climb = {args.step:.0f} ft   ΔISA = {args.disa:+.1f} °C   "
-          f"CG = {args.xcg*100:.0f} %")
+          f"CG = {args.xcg*100:.0f} %   vent = {args.vent:+.0f} kt")
     print("─" * 70)
     print(f"  {'Cas':<14}{'Paliers':<22}{'Temps[h]':>9}{'Carb[t]':>9}"
           f"{'CO2[t]':>8}{'NOx[kg]':>9}")
@@ -1077,7 +1079,8 @@ def _print_traj_result(cas, args):
                 print(f"  Gain carburant {k} step-climb(s) vs direct : "
                       f"{dg/1000:+.2f} t  ({dg/ref_fuel*100:+.2f} %)")
     print("=" * 70)
-    print("  Hypothèses : vent nul, profil vertical seul, step-climbs instantanés.")
+    vent = "vent nul" if args.vent == 0 else f"vent constant {args.vent:+.0f} kt"
+    print(f"  Hypothèses : {vent}, profil vertical seul, step-climbs instantanés.")
     print()
 
 
@@ -1113,7 +1116,7 @@ def loop_traj():
             cas = mod_traj.compare_step_climbs(
                 args.mass, args.dist * 1000.0, args.mach, args.base * mod_traj.FT,
                 step_ft=args.step, delta_isa=args.disa, x_cg=args.xcg,
-                model=_model[0], ds=args.ds * 1000.0)
+                model=_model[0], ds=args.ds * 1000.0, wind_kt=args.vent)
             _print_traj_result(cas, args)
 
         except (ValueError, FileNotFoundError) as e:

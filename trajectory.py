@@ -18,16 +18,21 @@ Hypothèses (énoncé) :
     initiale ni de descente : on ne traite QUE la phase de croisière).
   • Step-climbs INSTANTANÉS (note ² de l'énoncé) : l'altitude passe d'un palier
     au suivant sans phase de montée (masse et instant inchangés au saut).
-  • VENT NUL : distance sol = distance air (temps et SR référencés à la TAS).
-  • Masse et centrage : la masse décroît par combustion ; x_cg reste fixé
-    (config énoncé 500 000 kg / CG 40 %).
+  • VENT CONSTANT (défaut nul) : un vent longitudinal uniforme `wind_kt`
+    (>0 = vent arrière) s'ajoute à la TAS pour donner la vitesse sol
+    V_GS = V_TAS ± V_W ; les distances sont des distances SOL. L'équilibre
+    (trim, N1, débit, émissions) reste référencé à la TAS, insensible au vent.
+  • Masse et centrage : la masse décroît par combustion ; x_cg est soit fixé
+    (config énoncé 500 000 kg / CG 40 %), soit une fonction x_cg(masse) pour
+    modéliser la migration du centrage avec le carburant consommé.
 
 Intégration : marche avant (Euler) par pas de distance `ds` fixe (défaut 25 NM,
 la granularité de la méthode du cours). À chaque pas, l'avion est trimmé à la
 masse courante ; le carburant brûlé sur le pas (≈ 0.1 % de la masse à 25 NM) est
 petit devant la masse → l'erreur d'Euler est négligeable.
 
-Dépendances : numpy (atmosphere, aerodynamics, trim, propulsion).
+Dépendances : numpy, scipy (atmosphere, aerodynamics, trim, propulsion,
+performance — cette dernière pour le mode « Mach ECON adaptatif »).
 """
 
 import numpy as np
@@ -36,6 +41,7 @@ import atmosphere   as mod_atm
 import aerodynamics as mod_aero
 import propulsion   as mod_prop
 import trim         as mod_trim
+import performance  as mod_perf
 
 NOM         = "Module de Prédiction de Trajectoire"
 DESCRIPTION = "Profil vertical de croisière + step-climbs — temps, carburant, émissions (A380)"
@@ -66,27 +72,32 @@ def _emissions_nulles():
 # ---------------------------------------------------------------------------
 
 def integrate_segment(mass0, distance, altitude, mach, delta_isa=0.0,
-                      x_cg=0.40, model=None, ds=SUBSTEP_DEFAUT, s0=0.0, t0=0.0):
+                      x_cg=0.40, model=None, ds=SUBSTEP_DEFAUT, s0=0.0, t0=0.0,
+                      wind_kt=0.0):
     """
     Intègre un segment de croisière à altitude et Mach CONSTANTS sur `distance`.
 
-    À chaque pas de distance, l'avion est équilibré (trim) à la masse courante ;
-    on en tire la TAS et le débit carburant total W_F, d'où le temps du pas
-    (dt = ds/TAS), le carburant brûlé (dm = W_F·dt) et les masses de polluants
-    (EI_i × dm, indices d'émission OACI au régime N1 d'équilibre).
+    À chaque pas de distance (SOL), l'avion est équilibré (trim) à la masse
+    courante ; on en tire la TAS et le débit carburant total W_F. La vitesse
+    sol V_GS = V_TAS + V_W (vent longitudinal constant) donne le temps du pas
+    (dt = ds/V_GS), d'où le carburant brûlé (dm = W_F·dt) et les masses de
+    polluants (EI_i × dm, indices d'émission OACI au régime N1 d'équilibre).
 
     Paramètres
     ----------
     mass0     : float  Masse en début de segment [kg]
-    distance  : float  Longueur du segment (distance parcourue) [m]
+    distance  : float  Longueur du segment (distance SOL parcourue) [m]
     altitude  : float  Altitude du palier [m]
     mach      : float  Nombre de Mach de croisière (constant sur le segment)
     delta_isa : float  Déviation ISA [°C]                     (défaut 0)
-    x_cg      : float  Centrage (fraction de MAC)             (défaut 0.40)
+    x_cg      : float | callable  Centrage (fraction de MAC), fixe ou fonction
+                       x_cg(masse [kg]) évaluée à chaque pas  (défaut 0.40)
     model     : dict   Modèle aéro (build_aero_model) ; construit si None
     ds        : float  Pas d'intégration en distance [m]      (défaut 25 NM ≈ 46.3 km)
     s0, t0    : float  Distance / temps cumulés en entrée de segment (pour
                        chaîner plusieurs segments dans un profil global)
+    wind_kt   : float  Vent longitudinal constant [kt], >0 = vent arrière
+                       (V_GS = V_TAS + V_W)                   (défaut 0)
 
     Retourne
     --------
@@ -97,7 +108,8 @@ def integrate_segment(mass0, distance, altitude, mach, delta_isa=0.0,
     ----
     RuntimeError — si un point du segment est limité en poussée (W_F indéfini) :
         le palier est infaisable à cette masse (typiquement altitude trop haute
-        pour une masse encore lourde → justifie le recours aux step-climbs).
+        pour une masse encore lourde → justifie le recours aux step-climbs) ;
+        ou si le vent de face annule la vitesse sol (V_GS ≤ 0).
     """
     if model is None:
         model = mod_aero.build_aero_model()
@@ -106,6 +118,11 @@ def integrate_segment(mass0, distance, altitude, mach, delta_isa=0.0,
     step = distance / n
     a = float(mod_atm.speed_of_sound(altitude, delta_isa))
     tas = mach * a
+    gs = tas + wind_kt * KT                        # vitesse sol [m/s]
+    if gs <= 0.0:
+        raise RuntimeError(
+            f"Vent de face ({-wind_kt:.0f} kt) supérieur ou égal à la TAS "
+            f"({tas / KT:.0f} kt) : vitesse sol nulle ou négative.")
 
     mass = float(mass0)
     time = float(t0)
@@ -119,8 +136,10 @@ def integrate_segment(mass0, distance, altitude, mach, delta_isa=0.0,
         #   • trim aéro impossible (CL requis hors plage) → trim lève ValueError ;
         #   • limité en poussée (W_F/N1 indéfinis) → trim renvoie WF/N1 = None.
         try:
+            # Centrage : fixe, ou fonction de la masse courante (migration CG).
+            x = x_cg(mass) if callable(x_cg) else x_cg
             res = mod_trim.trim(mass, mach, altitude, delta_isa=delta_isa,
-                                x_cg=x_cg, model=model)
+                                x_cg=x, model=model)
         except ValueError as exc:
             raise RuntimeError(
                 f"Palier infaisable (équilibre aéro impossible) à "
@@ -132,7 +151,7 @@ def integrate_segment(mass0, distance, altitude, mach, delta_isa=0.0,
                 f"Palier infaisable (limité en poussée) à {altitude/FT:.0f} ft, "
                 f"masse {mass/1000:.1f} t, M{mach:.3f} : W_F indéfini.")
 
-        dt = step / tas                            # [s]
+        dt = step / gs                             # [s] (distance sol / vitesse sol)
         dm = wf * dt                               # [kg] carburant brûlé sur le pas
 
         # Indices d'émission OACI au régime d'équilibre, puis masses (EI × dm).
@@ -168,7 +187,7 @@ def integrate_segment(mass0, distance, altitude, mach, delta_isa=0.0,
 # ---------------------------------------------------------------------------
 
 def fly(mass0, segments, delta_isa=0.0, x_cg=0.40, model=None,
-        ds=SUBSTEP_DEFAUT):
+        ds=SUBSTEP_DEFAUT, wind_kt=0.0):
     """
     Vole un profil vertical = liste de segments de croisière, reliés par des
     step-climbs instantanés.
@@ -179,7 +198,7 @@ def fly(mass0, segments, delta_isa=0.0, x_cg=0.40, model=None,
     segments : list de (distance [m], altitude [m], mach) — un palier chacun.
                Le passage d'un segment au suivant est un step-climb instantané
                (l'altitude change, la masse et l'instant sont conservés).
-    delta_isa, x_cg, model, ds : cf. integrate_segment.
+    delta_isa, x_cg, model, ds, wind_kt : cf. integrate_segment.
 
     Retourne
     --------
@@ -203,7 +222,7 @@ def fly(mass0, segments, delta_isa=0.0, x_cg=0.40, model=None,
     for i, (distance, altitude, mach) in enumerate(segments):
         seg = integrate_segment(mass, distance, altitude, mach,
                                 delta_isa=delta_isa, x_cg=x_cg, model=model,
-                                ds=ds, s0=s, t0=time)
+                                ds=ds, s0=s, t0=time, wind_kt=wind_kt)
         seg_results.append(seg)
         profile.extend(seg['samples'])
         # Marqueur de fin de palier (altitude courante à la distance atteinte) :
@@ -231,6 +250,85 @@ def fly(mass0, segments, delta_isa=0.0, x_cg=0.40, model=None,
     }
 
 
+def fly_econ(mass0, segments, cost_index, delta_isa=0.0, x_cg=0.40,
+             model=None, ds=SUBSTEP_DEFAUT, wind_kt=0.0):
+    """
+    Vole un profil vertical au Mach ÉCONOMIQUE ADAPTATIF : au début de chaque
+    palier, le Mach ECON est recalculé (performance.cruise_speeds) à la masse
+    courante et à l'altitude du palier, puis maintenu constant sur le segment.
+
+    Paramètres
+    ----------
+    mass0      : float  Masse au début de la croisière [kg]
+    segments   : list de (distance [m], altitude [m]) — un palier chacun,
+                 SANS Mach (il est déterminé par l'optimisation ECON).
+    cost_index : float  Cost Index [kg/min] de l'optimum ECON.
+    delta_isa, x_cg, model, ds, wind_kt : cf. integrate_segment.
+
+    Retourne
+    --------
+    dict — mêmes clés que `fly`, plus 'machs' : liste du Mach ECON retenu
+           pour chaque palier (dans l'ordre des segments).
+
+    Lève
+    ----
+    RuntimeError — si l'optimum ECON est introuvable sur un palier (tout le
+        balayage limité en poussée) ou si un segment est infaisable (cf.
+        integrate_segment).
+    """
+    if model is None:
+        model = mod_aero.build_aero_model()
+
+    mass = float(mass0)
+    time = 0.0
+    s = 0.0
+    fuel = 0.0
+    emis = _emissions_nulles()
+    seg_results = []
+    profile = []
+    machs = []
+
+    for distance, altitude in segments:
+        x = x_cg(mass) if callable(x_cg) else x_cg
+        opt = mod_perf.cruise_speeds(mass, altitude, delta_isa=delta_isa,
+                                     cost_index=cost_index, model=model,
+                                     x_cg=x)
+        if opt['ECON'] is None:
+            raise RuntimeError(
+                f"Optimum ECON introuvable à {altitude/FT:.0f} ft, masse "
+                f"{mass/1000:.1f} t (palier limité en poussée).")
+        mach = float(opt['ECON']['mach'])
+        machs.append(mach)
+
+        seg = integrate_segment(mass, distance, altitude, mach,
+                                delta_isa=delta_isa, x_cg=x_cg, model=model,
+                                ds=ds, s0=s, t0=time, wind_kt=wind_kt)
+        seg_results.append(seg)
+        profile.extend(seg['samples'])
+        mass = seg['mass_end']
+        fuel += seg['fuel']
+        time += seg['time']
+        s    += seg['distance']
+        for p in _POLLUANTS:
+            emis[p] += seg['emissions'][p]
+        profile.append({'s': s, 't': time, 'alt': altitude, 'mach': mach,
+                        'mass': mass, 'tas': np.nan, 'wf_kgh': np.nan,
+                        'N1': np.nan, 'finesse': np.nan})
+
+    return {
+        'mass0':         float(mass0),
+        'mass_end':      mass,
+        'time':          time,
+        'fuel':          fuel,
+        'distance':      s,
+        'n_step_climbs': len(segments) - 1,
+        'emissions':     emis,
+        'machs':         machs,
+        'segments':      seg_results,
+        'profile':       profile,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Plans de step-climbs et comparaison 0 / 1 / 2 montées
 # ---------------------------------------------------------------------------
@@ -250,7 +348,7 @@ def plan_egal(total_distance, levels, mach):
 
 def compare_step_climbs(mass0, total_distance, mach, base_level,
                         step_ft=STEP_CLIMB_FT, delta_isa=0.0, x_cg=0.40,
-                        model=None, ds=SUBSTEP_DEFAUT):
+                        model=None, ds=SUBSTEP_DEFAUT, wind_kt=0.0):
     """
     Compare la MÊME trajectoire (même distance, même masse initiale, même Mach)
     volée avec 0, 1 puis 2 step-climbs, à partir du palier `base_level`.
@@ -270,7 +368,7 @@ def compare_step_climbs(mass0, total_distance, mach, base_level,
     mach           : float  Mach de croisière (constant)
     base_level     : float  Altitude du 1ᵉʳ palier [m]
     step_ft        : float  Amplitude d'un step-climb [ft]  (défaut 2000)
-    delta_isa, x_cg, model, ds : cf. fly.
+    delta_isa, x_cg, model, ds, wind_kt : cf. fly.
 
     Retourne
     --------
@@ -292,7 +390,7 @@ def compare_step_climbs(mass0, total_distance, mach, base_level,
                  'emissions': _emissions_nulles(), 'result': None}
         try:
             res = fly(mass0, segments, delta_isa=delta_isa, x_cg=x_cg,
-                      model=model, ds=ds)
+                      model=model, ds=ds, wind_kt=wind_kt)
             entry.update({'time': res['time'], 'fuel': res['fuel'],
                           'distance': res['distance'],
                           'emissions': res['emissions'], 'result': res})
