@@ -1,0 +1,246 @@
+<!-- @dsCard group="Figures du rapport" -->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Figures du rapport A380 — à polir</title>
+<style>
+  :root {
+    --ink: #22272E; --muted: #5A6472; --line: #E3E7EC;
+    --blue: #2563EB; --amber: #D97706; --violet: #7C3AED;
+    --green: #059669; --redc: #E5342B; --bluec: #2F6BD8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    background: #F6F8FA; color: var(--ink); padding: 48px 32px 80px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+  .lede { color: var(--muted); margin: 8px 0 6px; max-width: 70ch; line-height: 1.5; }
+  .brief {
+    background: #FFFFFF; border: 1px solid var(--line); border-radius: 14px;
+    padding: 18px 22px; margin: 22px 0 34px; line-height: 1.55; font-size: 14px;
+  }
+  .brief b { font-weight: 650; }
+  .brief ul { margin: 8px 0 0 18px; }
+  .swatches { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  .sw { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .sw i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+  .fig {
+    background: #FFFFFF; border: 1px solid var(--line); border-radius: 14px;
+    padding: 26px 26px 20px; margin-bottom: 30px;
+    box-shadow: 0 1px 2px rgba(15, 30, 60, 0.04);
+  }
+  .fig h2 { font-size: 16px; font-weight: 650; margin-bottom: 2px; }
+  .fig .sub { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+  .fig img { width: 100%; height: auto; display: block; }
+  .fig.narrow img { max-width: 620px; margin: 0 auto; }
+  .tag {
+    display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+    text-transform: uppercase; color: var(--muted); background: #EEF1F5;
+    border-radius: 999px; padding: 3px 10px; margin-bottom: 10px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Figures du rapport IEEE — polissage visuel</h1>
+  <p class="lede">Les seize figures 2D du rapport MGA803 (A380), générées par
+  les modules Python du projet et exportées en SVG vectoriel. Objectif : un
+  polissage visuel fin sans toucher aux données — chaque figure retournera
+  dans un rapport IEEE deux colonnes (largeur 3,5 in, pleine page 7,16 in,
+  police STIX/Times 7–8 pt).</p>
+
+  <div class="brief">
+    <b>Brief de polissage</b>
+    <ul>
+      <li>Ne modifier ni les courbes, ni les valeurs, ni les échelles — uniquement
+          le rendu (poids de traits, typographie, placements d'étiquettes,
+          respiration, grilles).</li>
+      <li>Conserver la palette (validée contraste + daltonisme) et la sémantique :
+          les trois séries comparées gardent leurs couleurs d'une figure à l'autre.</li>
+      <li>Style visé : sobre façon Apple/IEEE — grilles discrètes, étiquettes
+          directes plutôt que légendes lourdes, pas d'effets 3D ni d'ombres.</li>
+      <li>Le résultat doit rester lisible en petit (colonne IEEE ≈ 9 cm) et en
+          impression noir et blanc.</li>
+    </ul>
+    <div class="swatches">
+      <span class="sw"><i style="background:#22272E"></i> encre</span>
+      <span class="sw"><i style="background:#2563EB"></i> bleu — MRC · cas direct · NOx</span>
+      <span class="sw"><i style="background:#D97706"></i> ambre — LRC · 1 step-climb · UHC</span>
+      <span class="sw"><i style="background:#7C3AED"></i> violet — ECON · 2 step-climbs</span>
+      <span class="sw"><i style="background:#059669"></i> vert — CO</span>
+      <span class="sw"><i style="background:#2F6BD8"></i> bleu coût total</span>
+      <span class="sw"><i style="background:#E5342B"></i> rouge coût du temps</span>
+    </div>
+  </div>
+
+  <div class="fig narrow">
+    <span class="tag">Figure 1 · section II-A</span>
+    <h2>Profils de l'atmosphère standard</h2>
+    <p class="sub">T (avec ΔISA ±10 °C), P, ρ, a — tropopause à 11 km.
+    Largeur cible : une colonne.</p>
+    <img src="rapport-figs/fig_atm.svg" alt="Profils ISA">
+  </div>
+
+  <div class="fig narrow">
+    <span class="tag">Figure 4 · section II-C</span>
+    <h2>Polaire et finesse de l'avion complet</h2>
+    <p class="sub">Trois Mach, étoile = finesse max. Largeur cible : une
+    colonne.</p>
+    <img src="rapport-figs/fig_polaire.svg" alt="Polaire et finesse">
+  </div>
+
+  <div class="fig">
+    <span class="tag">Figure 6 · section III-C</span>
+    <h2>Comportement de l'équilibrage — α, δstab, F_N, W_F vs Mach</h2>
+    <p class="sub">Trois niveaux de vol (rampe bleue séquentielle). Largeur
+    cible : pleine page, 4 panneaux en ligne.</p>
+    <img src="rapport-figs/fig_trim_analyse.svg" alt="Analyse du trim">
+  </div>
+
+  <div class="fig narrow">
+    <span class="tag">Figure 7 · section III-D</span>
+    <h2>Influence du centrage</h2>
+    <p class="sub">δstab et W_F vs position du CG, repère 40 %. Largeur
+    cible : une colonne.</p>
+    <img src="rapport-figs/fig_cg.svg" alt="Influence du centrage">
+  </div>
+
+  <div class="fig narrow">
+    <span class="tag">Figure 11 · section IV-D</span>
+    <h2>Influence de l'altitude sur la portée spécifique</h2>
+    <p class="sub">(a) SR(M) par niveau de vol · (b) SR à M 0,85 vs FL pour
+    trois masses. Largeur cible : une colonne, deux panneaux empilés.</p>
+    <img src="rapport-figs/fig_sr_altitudes.svg" alt="SR selon altitude">
+  </div>
+
+  <div class="fig narrow">
+    <span class="tag">Figure 12 · section IV-E</span>
+    <h2>Influence du Cost Index sur le Mach ECON</h2>
+    <p class="sub">Points ECON (rampe bleue par CI) glissant le long de
+    SR(M), MRC marqué. Largeur cible : une colonne.</p>
+    <img src="rapport-figs/fig_econ_ci.svg" alt="ECON vs Cost Index">
+  </div>
+
+  <div class="fig narrow">
+    <span class="tag">Figure 14 · section V-C</span>
+    <h2>Régime moteur et débit le long d'EK215</h2>
+    <p class="sub">N1 et W_F vs distance, décrochements aux step-climbs.
+    Largeur cible : une colonne, deux panneaux empilés.</p>
+    <img src="rapport-figs/fig_ek_moteur.svg" alt="Profil moteur EK215">
+  </div>
+
+  <div class="fig narrow">
+    <span class="tag">Figure 15 · section V-D</span>
+    <h2>Carburant EK215 vs Mach de croisière</h2>
+    <p class="sub">Trois stratégies, repère M 0,85 opérationnel. Largeur
+    cible : une colonne.</p>
+    <img src="rapport-figs/fig_ek_mach.svg" alt="Carburant vs Mach">
+  </div>
+
+  <div class="fig narrow">
+    <span class="tag">Figure 16 · section V-E</span>
+    <h2>Carburant EK215 vs palier initial</h2>
+    <p class="sub">Trois stratégies, repère FL310. Largeur cible : une
+    colonne.</p>
+    <img src="rapport-figs/fig_ek_base.svg" alt="Carburant vs palier">
+  </div>
+
+  <div class="fig narrow">
+    <span class="tag">Figure 17 · section V-F</span>
+    <h2>Carburant EK215 vs amplitude Δh d'un step-climb</h2>
+    <p class="sub">500–4000 ft, repère RVSM 2000 ft ; monotone décroissant
+    (pas d'optimum intérieur dans notre modèle). Largeur cible : une
+    colonne.</p>
+    <img src="rapport-figs/fig_ek_dh.svg" alt="Carburant vs Δh">
+  </div>
+
+  <div class="fig narrow">
+    <span class="tag">Figure 17 · section V-F</span>
+    <h2>Carburant EK215 vs ΔISA</h2>
+    <p class="sub">Trois stratégies, −10 à +10 °C. Largeur cible : une
+    colonne.</p>
+    <img src="rapport-figs/fig_ek_disa.svg" alt="Carburant vs ΔISA">
+  </div>
+
+  <div class="fig narrow">
+    <span class="tag">Figure 18 · section V-G</span>
+    <h2>Écart relatif des émissions au vol direct</h2>
+    <p class="sub">Barres 1 SC (ambre) / 2 SC (violet) par polluant,
+    étiquettes directes. Largeur cible : une colonne.</p>
+    <img src="rapport-figs/fig_ek_emissions.svg" alt="Écarts émissions">
+  </div>
+
+  <div class="fig narrow">
+    <span class="tag">Figure 19 · section V-G</span>
+    <h2>Polluants EK215 vs Mach de croisière</h2>
+    <p class="sub">Grille 2×2 (CO₂, NOx, CO, UHC), trois stratégies, repère
+    M 0,85. Largeur cible : une colonne.</p>
+    <img src="rapport-figs/fig_ek_emis_mach.svg" alt="Polluants vs Mach">
+  </div>
+
+  <div class="fig narrow">
+    <span class="tag">Figure 20 · section V-G</span>
+    <h2>Polluants EK215 vs palier initial</h2>
+    <p class="sub">Grille 2×2 (CO₂, NOx, CO, UHC), trois stratégies, repère
+    FL310. Largeur cible : une colonne.</p>
+    <img src="rapport-figs/fig_ek_emis_base.svg" alt="Polluants vs palier">
+  </div>
+
+  <div class="fig narrow">
+    <span class="tag">Figure 21 · section V-G</span>
+    <h2>Polluants EK215 vs altitude (large plage, M 0,75)</h2>
+    <p class="sub">Grille 2×2 (CO₂, NOx, CO, UHC), trois stratégies,
+    altitude 7–13 km. CO₂/UHC en cuvette, NOx ↓, CO ↑. Largeur cible : une
+    colonne.</p>
+    <img src="rapport-figs/fig_ek_emis_alt.svg" alt="Polluants vs altitude">
+  </div>
+
+  <div class="fig narrow">
+    <span class="tag">Figure 2 · section II-E</span>
+    <h2>Diagramme ln-ln des indices d'émission (OACI / BFF)</h2>
+    <p class="sub">Indices de référence du Trent 970B-84 aux quatre régimes LTO ;
+    la droite pointillée situe le point de croisière du modèle. Largeur cible :
+    une colonne.</p>
+    <img src="rapport-figs/fig_ei_lnln.svg" alt="Diagramme ln-ln des EI">
+  </div>
+
+  <div class="fig narrow">
+    <span class="tag">Figure 3 · section IV</span>
+    <h2>Portée spécifique SR(M) et optima MRC / LRC / ECON</h2>
+    <p class="sub">Point de validation 500 t / 10 668 m / CI 160. Largeur cible :
+    une colonne.</p>
+    <img src="rapport-figs/fig_sr_optima.svg" alt="SR en fonction du Mach">
+  </div>
+
+  <div class="fig narrow">
+    <span class="tag">Figure 4 · section IV</span>
+    <h2>Décomposition du coût par distance (Cost Index)</h2>
+    <p class="sub">Coût total = carburant + temps ; minimum carburant au MRC,
+    minimum total à l'ECON. Sémantique de couleurs du cours (total bleu,
+    carburant encre tireté, temps rouge pointillé). Largeur cible : une colonne.</p>
+    <img src="rapport-figs/fig_cout_ci.svg" alt="Décomposition du coût">
+  </div>
+
+  <div class="fig narrow">
+    <span class="tag">Figure 5 · section IV</span>
+    <h2>SR(M) multi-masses et lieux des optima</h2>
+    <p class="sub">Quatre masses (400–550 t) en rampe séquentielle bleue ; lieux
+    MRC/LRC/ECON en trio catégoriel. Largeur cible : une colonne.</p>
+    <img src="rapport-figs/fig_sr_masses.svg" alt="SR multi-masses">
+  </div>
+
+  <div class="fig">
+    <span class="tag">Figure 6 · section V</span>
+    <h2>Étude EK215 — 0 / 1 / 2 step-climbs</h2>
+    <p class="sub">Quatre panneaux : profil vertical, masse, carburant cumulé,
+    consommation totale. Les trois cas gardent bleu/ambre/violet partout.
+    Largeur cible : pleine page (deux colonnes).</p>
+    <img src="rapport-figs/fig_ek215.svg" alt="Étude EK215">
+  </div>
+</div>
+</body>
+</html>
