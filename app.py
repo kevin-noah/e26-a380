@@ -2911,6 +2911,293 @@ _PRES_CSS = """
 """
 
 
+# ---------------------------------------------------------------------------
+# Animation « Équilibrage » — portée du deck de soutenance, mais rejouée sur
+# l'historique RÉEL de convergence lu dans valeurs.json (aucune valeur codée en
+# dur, contrairement au deck). Doit passer par une iframe : Streamlit retire les
+# <script> injectés en markdown.
+# ---------------------------------------------------------------------------
+
+_SUP = str.maketrans("-0123456789", "⁻⁰¹²³⁴⁵⁶⁷⁸⁹")
+
+
+def _res_label(x):
+    """Résidu |Δα| en libellé court, exposants en Unicode (rendu dans un SVG)."""
+    if not x:
+        return ""
+    if x >= 1:
+        return f"{x:.1f}".replace(".", ",")
+    if x >= 0.1:
+        return f"{x:.2f}".replace(".", ",")
+    e = int(np.floor(np.log10(x)))
+    m = int(round(x / 10.0 ** e))
+    if m == 10:                      # 9,6·10⁻³ → 1·10⁻²
+        m, e = 1, e + 1
+    return f"{m}·10{str(e).translate(_SUP)}"
+
+
+_TRIM_ANIM_HTML = """
+<style>
+  :root { --ink:#1C1C1E; --ink2:#3A3A3C; --ink3:#6E6E73; --ink4:#8E8E93;
+          --hair:rgba(60,60,67,.16); --acc:__ACC__; --prop:#C2710A; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:transparent; color:var(--ink);
+         font-family:__UI__; -webkit-font-smoothing:antialiased; }
+  /* largeur plafonnée et scène bornée en hauteur : l'iframe a une hauteur
+     fixe, sans ces gardes la scène déborderait sur un grand écran (le SVG
+     reste proportionnel, preserveAspectRatio le centre dans sa boîte). */
+  .ta-grid { display:grid; grid-template-columns:7.2fr 4.8fr; gap:32px;
+             align-items:center; padding:2px 4px 6px;
+             max-width:1250px; margin:0 auto; }
+  .ta-scene { position:relative; }
+  .ta-scene svg { width:100%; height:auto; max-height:330px; display:block;
+                  overflow:visible; }
+  .dlab { font-size:25px; font-weight:640; letter-spacing:-.01em; }
+  .dsub { font-size:19px; fill:var(--ink3); }
+  .ta-note { margin-top:8px; font-size:11px; color:var(--ink4); }
+  .ta-stepper { display:flex; margin-top:16px; border-top:1px solid var(--hair); }
+  .ta-step { flex:1; padding:11px 11px 0; border-left:1px solid var(--hair);
+             opacity:.34; transition:opacity .3s; }
+  .ta-step:first-child { border-left:0; padding-left:0; }
+  .ta-step.on { opacity:1; }
+  .ta-step.done { opacity:.68; }
+  .ta-step .d { width:8px; height:8px; border-radius:50%; background:var(--ink4);
+                margin-bottom:8px; transition:background .3s, box-shadow .3s; }
+  .ta-step.on .d { background:var(--acc);
+                   box-shadow:0 0 0 4px color-mix(in srgb,var(--acc) 16%,transparent); }
+  .ta-step.done .d { background:var(--acc); }
+  .ta-step .n { font-size:13px; font-weight:620; letter-spacing:-.01em; }
+  .ta-step .s { margin-top:3px; font-size:10.5px; color:var(--ink3); line-height:1.35; }
+  .ta-panel { display:flex; flex-direction:column; }
+  .ta-it { font-size:10.5px; font-weight:600; letter-spacing:.2em;
+           text-transform:uppercase; color:var(--acc); display:flex;
+           align-items:baseline; gap:10px; }
+  .ta-it b { font-size:26px; font-weight:650; letter-spacing:-.02em;
+             font-variant-numeric:tabular-nums; color:var(--ink); }
+  .ta-cnt { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px;
+            padding:14px 0 16px; border-bottom:1px solid var(--hair); }
+  .ta-c .k { font-size:10.5px; color:var(--ink3); margin-bottom:5px; }
+  .ta-c .v { font-family:__MONO__; font-size:20px; font-weight:600;
+             letter-spacing:-.02em; font-variant-numeric:tabular-nums;
+             white-space:nowrap; }
+  .ta-c .v small { font-size:11.5px; color:var(--ink3); font-weight:500;
+                   margin-left:3px; }
+  .ta-res { padding:15px 0 4px; }
+  .ta-res .k { font-size:10.5px; color:var(--ink3); margin-bottom:9px; }
+  .ta-badge { margin-top:14px; display:inline-flex; align-items:center; gap:8px;
+              align-self:flex-start; padding:7px 14px; border-radius:999px;
+              border:1.5px solid color-mix(in srgb,var(--acc) 45%,transparent);
+              color:var(--acc); font-size:12px; font-weight:620;
+              opacity:0; transform:translateY(6px);
+              transition:opacity .45s, transform .45s; }
+  .ta-badge.show { opacity:1; transform:none; }
+  .ta-badge svg { width:15px; height:15px; }
+</style>
+
+<div class="ta-grid">
+  <div class="ta-scene">
+    <svg viewBox="0 0 880 460" role="img"
+         aria-label="L'avion s'équilibre au fil des itérations">
+      <defs>
+        <marker id="ahI" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5"
+                markerHeight="7.5" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--ink)"/></marker>
+        <marker id="ahT" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5"
+                markerHeight="7.5" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--acc)"/></marker>
+        <marker id="ahP" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5"
+                markerHeight="7.5" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--prop)"/></marker>
+        <marker id="ahG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5"
+                markerHeight="7.5" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--ink3)"/></marker>
+      </defs>
+      <line x1="60" y1="230" x2="820" y2="230" stroke="var(--hair)"
+            stroke-width="1.5" stroke-dasharray="1 9" stroke-linecap="round"/>
+      <g id="taPlane" transform="rotate(0 440 230)">
+        <g transform="translate(440 230) scale(7.6)">
+          <path d="M-26.6,-8.9 L-24.4,-8.9 L-22.1,-8.1 L-15.4,-2.6 L-11.4,-0.6 L-0.9,-1.4 L0.0,-0.8 L0.1,0.6 L25.4,0.9 L27.9,1.9 L29.9,3.4 L34.1,4.6 L36.0,6.0 L35.1,6.9 L24.9,7.1 L10.4,8.9 L5.9,8.9 L-7.9,6.9 L-22.4,2.1 L-22.8,0.8 L-28.6,-5.6 L-31.6,-5.9 L-36.0,-7.2 L-33.9,-7.4 L-31.6,-8.4 L-26.6,-8.9 Z"
+                fill="var(--ink)" transform="translate(0,-1)"/>
+          <g id="taStab" transform="rotate(0 -27 -6.6)">
+            <line x1="-27" y1="-6.6" x2="-36.5" y2="-6.6" stroke="var(--acc)"
+                  stroke-width="2.6" stroke-linecap="round"/>
+          </g>
+        </g>
+        <g id="taFN">
+          <line id="taFNline" x1="726" y1="228" x2="836" y2="228"
+                stroke="var(--prop)" stroke-width="4" stroke-linecap="round"
+                marker-end="url(#ahP)"/>
+          <text class="dlab" x="756" y="200" fill="var(--prop)">F<tspan
+                font-size="18" dy="4">N</tspan></text>
+        </g>
+        <g id="taD">
+          <line x1="152" y1="228" x2="74" y2="228" stroke="var(--ink3)"
+                stroke-width="3.4" stroke-linecap="round" marker-end="url(#ahG)"/>
+          <text class="dlab" x="104" y="200" fill="var(--ink3)">D</text>
+        </g>
+      </g>
+      <line x1="440" y1="148" x2="440" y2="56" stroke="var(--acc)"
+            stroke-width="4" stroke-linecap="round" marker-end="url(#ahT)"/>
+      <text class="dlab" x="458" y="70" fill="var(--acc)">L</text>
+      <line x1="440" y1="314" x2="440" y2="406" stroke="var(--ink)"
+            stroke-width="4" stroke-linecap="round" marker-end="url(#ahI)"/>
+      <text class="dlab" x="458" y="404" fill="var(--ink)">W = m g₀</text>
+      <text id="taAlphaLbl" class="dsub" x="760" y="292" text-anchor="middle">α = 0,00°</text>
+      <text id="taStabLbl" class="dsub" x="128" y="330" text-anchor="middle">δstab = 0,00°</text>
+    </svg>
+    <div class="ta-note">Assiette et calage amplifiés ×4 pour la lecture ·
+      valeurs réelles à droite.</div>
+    <div class="ta-stepper" id="taStepper">
+      <div class="ta-step" data-k="0"><div class="d"></div><div class="n">Init</div>
+        <div class="s">α, δ = 0 · F<sub>N</sub> = 40 % du max</div></div>
+      <div class="ta-step" data-k="1"><div class="d"></div><div class="n">α*</div>
+        <div class="s">portance requise → racine sur C<sub>L</sub></div></div>
+      <div class="ta-step" data-k="2"><div class="d"></div><div class="n">F<sub>N</sub>*</div>
+        <div class="s">traînée / cos(α + φ<sub>T</sub>)</div></div>
+      <div class="ta-step" data-k="3"><div class="d"></div><div class="n">δ*</div>
+        <div class="s">moment de tangage annulé</div></div>
+      <div class="ta-step" data-k="4"><div class="d"></div><div class="n">↻ / ✓</div>
+        <div class="s">reboucle jusqu'aux trois critères</div></div>
+    </div>
+  </div>
+
+  <div class="ta-panel">
+    <div class="ta-it">Itération <b id="taIt">0</b></div>
+    <div class="ta-cnt">
+      <div class="ta-c"><div class="k">Incidence α</div>
+        <div class="v"><span id="taValA">0,000</span><small>°</small></div></div>
+      <div class="ta-c"><div class="k">Calage δ<sub>stab</sub></div>
+        <div class="v"><span id="taValD">0,000</span><small>°</small></div></div>
+      <div class="ta-c"><div class="k">Poussée F<sub>N</sub></div>
+        <div class="v"><span id="taValF">0</span><small>kN</small></div></div>
+    </div>
+    <div class="ta-res">
+      <div class="k">Résidu |Δα| — un ordre de grandeur par itération
+        <span style="color:var(--ink4)">(échelle log)</span></div>
+      <svg viewBox="0 0 560 190" style="width:100%;display:block;overflow:visible">
+        <line x1="8" y1="164" x2="552" y2="164" stroke="var(--hair)" stroke-width="1.5"/>
+        <g id="taBars"></g>
+      </svg>
+    </div>
+    <div class="ta-badge" id="taBadge">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="m4.5 12.5 5 5L19.5 7"/></svg>__BADGE__
+    </div>
+  </div>
+</div>
+
+<script>
+/* Convergence rejouée sur l'historique réel du trim (valeurs.json).
+   Cycle : init (1,2 s) → N itérations (1,9 s) → convergé (3 s), en boucle. */
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const plane = $('taPlane'), stab = $('taStab'), fnLine = $('taFNline');
+  if (!plane) return;
+
+  const ALPHA = __ALPHA__, DSTAB = __DSTAB__, FN = __FN__;
+  const RES = __RES__, RESLBL = __RESLBL__;
+  const N = ALPHA.length - 1;              // nombre d'itérations
+  const AMP = 4;                           // amplification visuelle des angles
+  const T0 = 1.2, TI = 1.9, TH = 3.0, TOTAL = T0 + N * TI + TH;
+
+  const valA = $('taValA'), valD = $('taValD'), valF = $('taValF');
+  const itEl = $('taIt'), badge = $('taBadge');
+  const alphaLbl = $('taAlphaLbl'), stabLbl = $('taStabLbl');
+  const steps = Array.from(document.querySelectorAll('#taStepper .ta-step'));
+
+  const barsG = $('taBars');
+  const pas = 540 / N;
+  const barX = (k) => 20 + (k - 1) * pas;
+  const barH = (k) => (Math.log10(RES[k]) + 3.6) / 4.5 * 140;
+  const bars = [];
+  for (let k = 1; k <= N; k++) {
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    const h = barH(k), w = pas * 0.62;
+    g.innerHTML =
+      `<rect x="${barX(k)}" y="${164 - h}" width="${w}" height="${h}" rx="5"
+             fill="var(--acc)" opacity="0"></rect>` +
+      `<text x="${barX(k) + w / 2}" y="${164 - h - 12}" text-anchor="middle"
+             class="dsub" opacity="0"
+             style="font-weight:600;fill:var(--ink2)">${RESLBL[k]}</text>` +
+      `<text x="${barX(k) + w / 2}" y="186" text-anchor="middle" class="dsub"
+             opacity="0">it ${k}</text>`;
+    barsG.appendChild(g);
+    bars.push(g);
+  }
+
+  const fr = (x, d) => x.toFixed(d).replace('.', ',').replace('-', '−');
+  const ease = (u) => u < .5 ? 4*u*u*u : 1 - Math.pow(-2*u + 2, 3) / 2;
+  const lerp = (a, b, u) => a + (b - a) * u;
+
+  function render(k, u, converged) {
+    const a = k === 0 ? 0 : lerp(ALPHA[k-1], ALPHA[k], u);
+    const d = k === 0 ? 0 : lerp(DSTAB[k-1], DSTAB[k], u);
+    const f = k === 0 ? FN[0] : lerp(FN[k-1], FN[k], u);
+    plane.setAttribute('transform', `rotate(${(-a * AMP).toFixed(2)} 440 230)`);
+    stab.setAttribute('transform', `rotate(${(-d * AMP * 2).toFixed(2)} -27 -6.6)`);
+    fnLine.setAttribute('x2', (726 + 110 * f / FN[0]).toFixed(1));
+    valA.textContent = fr(a, 3); valD.textContent = fr(d, 3); valF.textContent = fr(f, 1);
+    alphaLbl.textContent = `α = ${fr(a, 2)}°`;
+    stabLbl.textContent = `δstab = ${fr(d, 2)}°`;
+    itEl.textContent = k;
+    steps.forEach((s, i) => {
+      s.classList.remove('on', 'done');
+      if (k === 0) { if (i === 0) s.classList.add(converged ? 'done' : 'on'); return; }
+      if (i === 0) { s.classList.add('done'); return; }
+      const gate = (i - 1) * 0.22;
+      if (converged) s.classList.add('done');
+      else if (u >= gate + 0.22) s.classList.add('done');
+      else if (u >= gate) s.classList.add('on');
+    });
+    bars.forEach((g, i) => {
+      const show = (i + 1 < k) || (i + 1 === k && u > 0.82) || converged;
+      g.querySelectorAll('rect,text').forEach(el =>
+        el.setAttribute('opacity', show ? (el.tagName === 'rect' ? '0.92' : '1') : '0'));
+    });
+    badge.classList.toggle('show', converged);
+  }
+
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    render(N, 1, true);                    // état final, statique
+    return;
+  }
+  const start = performance.now();
+  (function frame(now) {
+    const t = ((now - start) / 1000) % TOTAL;
+    if (t < T0) render(0, 0, false);
+    else if (t < T0 + N * TI) {
+      const k = Math.min(N, Math.floor((t - T0) / TI) + 1);
+      const u = ease(Math.min(1, ((t - T0) - (k - 1) * TI) / (TI * 0.62)));
+      render(k, u, false);
+    } else render(N, 1, true);
+    requestAnimationFrame(frame);
+  })(start);
+})();
+</script>
+"""
+
+
+def _pr_anim_trim(v, acc):
+    """Animation de la convergence du trim, rejouée sur l'historique réel."""
+    t = v["trim_vitrine"]
+    h = t["history"]
+    badge = (f"Convergé en {t['iterations']} itérations · "
+             f"N₁ = {t['N1']:.1f} % · W_F = {t['WF_total_kgh'] / 1000:.1f} t/h"
+             .replace(".", ","))
+    html = _TRIM_ANIM_HTML
+    for jeton, valeur in (
+            ("__ACC__", acc), ("__UI__", FONT_UI), ("__MONO__", FONT_MONO),
+            ("__BADGE__", badge),
+            ("__ALPHA__", json.dumps([x["alpha"] for x in h])),
+            ("__DSTAB__", json.dumps([x["dstab"] for x in h])),
+            ("__FN__", json.dumps([x["FN_kN"] for x in h])),
+            ("__RES__", json.dumps([x["d_alpha"] for x in h])),
+            ("__RESLBL__", json.dumps([_res_label(x["d_alpha"]) for x in h]))):
+        html = html.replace(jeton, valeur)
+    st.iframe(html, height=470)
+
+
 def _pr_cardhead(titre, sub="", badge="", acc="#3634A3"):
     """En-tête de carte, même patron que les pages module : titre et
     sous-titre groupés à gauche, repère du rapport à droite."""
@@ -3037,7 +3324,14 @@ def _pr_contexte(acc_d, acc_v, v):
                     "step-climbs", tag="résultat", hl=True, acc=acc_d)
         + '</div>', unsafe_allow_html=True)
 
-    _pr_fig("png/fig_geometry.png", acc_d)
+    # Ouverture : la convergence du trim rejouée en direct — le cœur du modèle,
+    # plus parlant qu'un maillage statique. (La géométrie OpenVSP reste dans la
+    # galerie, partie « Modélisation ».)
+    with st.container(border=True):
+        _pr_cardhead("L'avion s'équilibre",
+                     "point fixe sur (α, δstab, F_N) — 500 t / 10 400 m / M_ECON",
+                     "Animation", acc_d)
+        _pr_anim_trim(v, acc_d)
 
 
 def _pr_demarche(acc_d, acc_v, v):
