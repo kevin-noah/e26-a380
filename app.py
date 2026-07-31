@@ -2773,18 +2773,35 @@ FIG_PARTIES = ["Modélisation", "Équilibrage", "Vitesses optimales",
 
 _PRES_CSS = """
 <style>
-/* Barre de navigation du fil, collante sous le titre (même patron que les
-   barres de contrôles des pages Croisière et Trajectoire). */
-.st-key-pr_navbar {
-    position: sticky; top: 3.4rem; z-index: 30;
-    background: rgba(255,255,255,.66) !important;
-    -webkit-backdrop-filter: blur(28px) saturate(180%);
-    backdrop-filter: blur(28px) saturate(180%);
-    border: .5px solid rgba(255,255,255,.7) !important;
-    border-radius: 16px !important;
-    box-shadow: 0 1px 2px rgba(16,24,40,.04),
-                0 10px 30px rgba(16,24,40,.06) !important;
-    padding: .55rem .9rem !important; margin-bottom: 1.1rem; }
+/* Ruban gauche MASQUÉ sur cette page : toute la largeur va aux figures, et la
+   navigation (étapes, démo, retour) vit dans le volet de droite. Le volet lui
+   -même reprend _RP_CSS (conteneur clé rp_panel). */
+[data-testid="stSidebar"] { display: none !important; }
+/* Étapes du fil : radio vertical transformé en stepper (même patron que la nav
+   du ruban gauche — rond natif masqué, item actif à filet d'accent). */
+.st-key-rp_panel [role="radiogroup"] { gap: 3px !important; }
+.st-key-rp_panel [role="radiogroup"] > label {
+    display: flex !important; align-items: center;
+    padding: 9px 11px !important; margin: 0 !important; cursor: pointer;
+    border-radius: 10px; border-left: 3px solid transparent;
+    transition: background .15s, border-color .15s; }
+.st-key-rp_panel [role="radiogroup"] > label > div:first-child {
+    display: none !important; }
+.st-key-rp_panel [role="radiogroup"] p {
+    margin: 0; font-size: 13.5px; font-weight: 500; color: #5B6573;
+    transition: color .15s; }
+.st-key-rp_panel [role="radiogroup"] > label:hover {
+    background: color-mix(in srgb, var(--pracc) 7%, transparent); }
+.st-key-rp_panel [role="radiogroup"] > label:has(input:checked) {
+    background: color-mix(in srgb, var(--pracc) 11%, transparent);
+    border-left-color: var(--pracc); }
+.st-key-rp_panel [role="radiogroup"] > label:has(input:checked) p {
+    color: var(--pracc); font-weight: 650; }
+/* le volet porte l'accent de la page pour ses color-mix */
+.st-key-rp_panel { --pracc: #3634A3; }
+.rp-sep { height: 1px; background: rgba(60,60,67,.12); margin: 16px 0 4px; }
+.rp-lbl { font-size: 10.5px; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; color: #8B93A1; margin: 14px 0 6px; }
 /* Figure : l'image remplit toute la largeur de sa carte (les figures du
    rapport sont vectorielles, elles ne se dégradent pas en s'agrandissant).
    Garde-fou en hauteur pour qu'une figure haute tienne dans l'écran sans
@@ -2937,7 +2954,8 @@ def _pr_segm(label, options, key, **kw):
     qui viderait la page en pleine présentation. On rétablit alors la dernière
     valeur, depuis un callback (seul endroit où réécrire la clé d'un widget est
     permis)."""
-    st.session_state.setdefault(key, options[0])
+    if st.session_state.get(key) not in options:   # état hérité devenu invalide
+        st.session_state[key] = st.session_state[f"_{key}_prec"] = options[0]
     st.session_state.setdefault(f"_{key}_prec", st.session_state[key])
 
     def _garder():
@@ -3320,13 +3338,10 @@ _PR_FIL = dict(zip(PR_ETAPES, [_pr_contexte, _pr_demarche, _pr_choix, _pr_trim,
                                _pr_bilan]))
 
 
-def _pr_galerie(acc_d, acc_v, v):
+def _pr_galerie(acc_d, acc_v, v, partie):
     """Toutes les figures du rapport, groupées par partie — réserve pour les
     questions. Une seule partie est rendue à la fois (les images sont
     embarquées en base64 : tout afficher alourdirait la page pour rien)."""
-    partie = _pr_segm("Partie", FIG_PARTIES + ["Tableaux"], "pr_partie",
-                      label_visibility="collapsed")
-
     if partie != "Tableaux":
         noms = [f[0] for f in FIGURES if f[2] == partie]
         st.caption(f"{len(noms)} figure(s) — partie « {partie} » du rapport")
@@ -3404,11 +3419,79 @@ def _pr_vitesses_tbl(acc_d, v):
                         "le coût total.", acc=acc_d, hl=2)
 
 
+def _pr_volet(acc, actif=True):
+    """Volet de droite : mode, étapes du fil (ou parties de la galerie),
+    avance/recul, et sauts vers les pages de démo. Le ruban gauche étant
+    masqué sur cette page, c'est la SEULE navigation — d'où les raccourcis de
+    sortie en bas. Retourne (mode, étape, partie)."""
+
+    def _bouger(d):
+        """Étape précédente / suivante, en boucle. Callback : c'est le seul
+        endroit où réécrire la clé d'un widget est permis."""
+        i = PR_ETAPES.index(st.session_state["pr_etape"])
+        st.session_state["pr_etape"] = PR_ETAPES[(i + d) % len(PR_ETAPES)]
+
+    def _aller(page):
+        st.session_state["nav"] = page
+
+    with st.container(border=True, key="rp_panel"):
+        st.markdown('<div class="rp-head">Présentation</div>'
+                    '<div class="rp-sub">MGA803 · Performances A380</div>',
+                    unsafe_allow_html=True)
+        mode = _pr_segm("Mode", ["Fil", "Galerie"], "pr_mode",
+                        label_visibility="collapsed")
+
+        etape, partie = st.session_state.get("pr_etape"), None
+        if not actif:
+            mode = "Fil"
+        elif mode == "Fil":
+            st.markdown('<div class="rp-lbl">Étapes</div>',
+                        unsafe_allow_html=True)
+            etape = st.radio(
+                "Étape", PR_ETAPES, key="pr_etape",
+                format_func=lambda e: f"{PR_ETAPES.index(e) + 1} · {e}",
+                label_visibility="collapsed")
+            c = st.columns(2)
+            c[0].button("‹ Préc.", key="pr_prev", on_click=_bouger, args=(-1,),
+                        width="stretch", help="Étape précédente")
+            c[1].button("Suiv. ›", key="pr_next", on_click=_bouger, args=(1,),
+                        width="stretch", help="Étape suivante")
+        else:
+            st.markdown('<div class="rp-lbl">Parties du rapport</div>',
+                        unsafe_allow_html=True)
+            partie = st.radio("Partie", FIG_PARTIES + ["Tableaux"],
+                              key="pr_partie", label_visibility="collapsed")
+
+        st.markdown('<div class="rp-lbl">Démonstration en direct</div>',
+                    unsafe_allow_html=True)
+        st.button("Croisière & coût", key="pr_go_perf", on_click=_aller,
+                  args=("Performance croisière",), width="stretch",
+                  help="Vitesses optimales MRC / LRC / ECON, en direct")
+        st.button("Trajectoire", key="pr_go_traj", on_click=_aller,
+                  args=("Trajectoire",), width="stretch",
+                  help="Vol EK215 et step-climbs, en direct")
+        st.markdown('<div class="rp-sep"></div>', unsafe_allow_html=True)
+        st.button("← Tous les modules", key="pr_go_home", on_click=_aller,
+                  args=("Accueil",), width="stretch",
+                  help="Retour à l'accueil (le ruban gauche réapparaît)")
+
+    return mode, etape, partie
+
+
 def page_present():
     """Support de soutenance : le fil narratif (8 étapes) et la galerie
     complète des figures et tableaux du rapport."""
     acc_d, acc_v = ACCENTS["Présentation"]
-    st.markdown(_DASH_CSS + _PRES_CSS, unsafe_allow_html=True)
+    st.markdown(_DASH_CSS + _RP_CSS + _PRES_CSS, unsafe_allow_html=True)
+
+    vals = charger_valeurs()
+    mode, etape, partie = _pr_volet(acc_d, vals is not None)
+
+    if vals is None:
+        st.info("**Chiffres indisponibles.** `rapport/figures/valeurs.json` est "
+                "absent — lancer `python rapport/figures/make_figures.py` pour "
+                "générer les figures et les valeurs du rapport.", icon="📄")
+        return
 
     st.markdown('<div style="text-align:right;margin-bottom:.3rem">'
                 '<span class="perf-modpill" style="background:rgba(94,92,230,.12);'
@@ -3420,39 +3503,8 @@ def page_present():
               "raconte — puis la galerie complète, en réserve pour les questions",
               accent=acc_v)
 
-    vals = charger_valeurs()
-    if vals is None:
-        st.info("**Chiffres indisponibles.** `rapport/figures/valeurs.json` est "
-                "absent — lancer `python rapport/figures/make_figures.py` pour "
-                "générer les figures et les valeurs du rapport.", icon="📄")
-        return
-
-    # ── Barre de navigation : mode, étape courante, boutons ‹ › ─────────────
-    def _bouger(d):
-        """Étape précédente / suivante, en boucle. Callback : écrire la clé du
-        widget d'étape y est permis, et le contrôle segmenté suit."""
-        i = PR_ETAPES.index(st.session_state["pr_etape"])
-        e = PR_ETAPES[(i + d) % len(PR_ETAPES)]
-        st.session_state["pr_etape"] = e
-        st.session_state["_pr_etape_prec"] = e
-
-    with st.container(border=True, key="pr_navbar"):
-        mode = _pr_segm("Mode", ["Fil de soutenance", "Toutes les figures"],
-                        "pr_mode", label_visibility="collapsed")
-        if mode == "Fil de soutenance":
-            c = st.columns([1, 14, 1], vertical_alignment="center")
-            c[0].button("‹", key="pr_prev", on_click=_bouger, args=(-1,),
-                        width="stretch", help="Étape précédente")
-            with c[1]:
-                etape = _pr_segm(
-                    "Étape", PR_ETAPES, "pr_etape",
-                    format_func=lambda e: f"{PR_ETAPES.index(e) + 1} · {e}",
-                    label_visibility="collapsed")
-            c[2].button("›", key="pr_next", on_click=_bouger, args=(1,),
-                        width="stretch", help="Étape suivante")
-
-    if mode == "Toutes les figures":
-        _pr_galerie(acc_d, acc_v, vals)
+    if mode == "Galerie":
+        _pr_galerie(acc_d, acc_v, vals, partie)
         return
 
     _PR_FIL[etape](acc_d, acc_v, vals)
