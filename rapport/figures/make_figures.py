@@ -1048,6 +1048,75 @@ def fig_econ_ci(model):
 
 
 # ---------------------------------------------------------------------------
+# Figure — ce que le Cost Index achète : temps de vol contre carburant
+# ---------------------------------------------------------------------------
+
+def fig_ci_temps(model):
+    """Temps de croisière et carburant du vol EK215 en fonction du Cost Index.
+
+    Le CI ne modifie pas la trajectoire : il déplace le Mach économique, et
+    c'est ce Mach qui fixe le temps et la consommation. La figure montre donc
+    le compromis que l'on achète en montant le CI — et situe la valeur retenue
+    pour l'étude.
+    """
+    cis = [0, 25, 50, 100, 150, 180, 250, 320, 400, 500]
+    print(f"fig_ci_temps …  ({len(cis)} Cost Index × un vol EK215 complet)")
+
+    machs, temps, carbu = [], [], []
+    for ci in cis:
+        r = mod_perf.cruise_speeds(MASS_STUDY, ALT_STUDY, cost_index=float(ci),
+                                   model=model)
+        if not r["ECON"]:
+            continue
+        m = r["ECON"]["mach"]
+        vol = mod_traj.integrate_segment(MASS_STUDY, DIST_EK, BASE_EK, m,
+                                         model=model)
+        machs.append(m)
+        temps.append(vol["time"] / 3600.0)
+        carbu.append(vol["fuel"] / 1000.0)
+        print(f"     CI {ci:3d} → M {m:.3f} · {temps[-1]:.2f} h · {carbu[-1]:.1f} t")
+
+    cis_ok = [c for c in cis][:len(machs)]
+    VALS["ci_temps"] = {
+        str(c): {"mach": m, "time_h": t, "fuel_t": f}
+        for c, m, t, f in zip(cis_ok, machs, temps, carbu)}
+
+    fig, (a1, a2) = plt.subplots(2, 1, sharex=True, figsize=(COL_W, 3.5))
+
+    # (a) temps de croisière — rouge : sémantique « coût du temps » du cours
+    a1.plot(cis_ok, temps, color=REDC, marker="o", markersize=3.4,
+            markerfacecolor="white", markeredgewidth=1.0, zorder=3)
+    a1.set_ylabel("Temps de croisière [h]")
+    a1.set_title("(a)", loc="left", fontsize=8, color=GRAY)
+
+    # (b) carburant — encre : la contrepartie payée
+    a2.plot(cis_ok, carbu, color=INK, marker="o", markersize=3.4,
+            markerfacecolor="white", markeredgewidth=1.0, zorder=3)
+    a2.set_ylabel("Carburant [t]")
+    a2.set_xlabel("Cost Index [kg/min]")
+    a2.set_title("(b)", loc="left", fontsize=8, color=GRAY)
+
+    i180 = cis_ok.index(int(CI_STUDY))
+    for ax, serie, col in ((a1, temps, REDC), (a2, carbu, INK)):
+        ax.axvline(CI_STUDY, color=GRAY, linestyle="--", linewidth=0.8, zorder=1)
+        ax.plot(CI_STUDY, serie[i180], "s", color=col, markersize=5.2,
+                markeredgecolor="white", markeredgewidth=1.0, zorder=4)
+        ax.grid(True, alpha=0.55)
+    a1.annotate(f"CI retenu = {CI_STUDY:.0f}\n"
+                f"$M^{{ECON}}$ = {machs[i180]:.3f}".replace(".", ","),
+                (CI_STUDY, temps[i180]), textcoords="offset points",
+                xytext=(9, 9), fontsize=6.6, color=GRAY)
+    # ce que coûte et ce que rapporte le passage de CI 0 à CI 500, posé dans le
+    # coin laissé libre par la courbe (montante en (b), descendante en (a))
+    a1.text(0.035, 0.07, f"CI 0 → 500 : −{(temps[0] - temps[-1]) * 60:.0f} min",
+            transform=a1.transAxes, fontsize=6.6, color=REDC, fontweight="bold")
+    a2.text(0.035, 0.87,
+            f"CI 0 → 500 : +{carbu[-1] - carbu[0]:.1f} t".replace(".", ","),
+            transform=a2.transAxes, fontsize=6.6, color=INK, fontweight="bold")
+    _save(fig, "fig_ci_temps.pdf")
+
+
+# ---------------------------------------------------------------------------
 # Figure 14 — évolution relative des émissions selon la stratégie de paliers
 # ---------------------------------------------------------------------------
 
@@ -1281,6 +1350,7 @@ def main():
     fig_ek_sensibilites(model)
     fig_ek_wind(model)
     fig_econ_ci(model)
+    fig_ci_temps(model)
     fig_ek_emissions()
     fig_ek_emissions_sweeps(model)
     extra_values(model)

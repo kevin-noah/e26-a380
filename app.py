@@ -2714,6 +2714,14 @@ FIGURES = [
      "déplacement du Mach ECON",
      "Déplacement du Mach ECON le long de la courbe SR(M) (500 t / 10 400 m) "
      "quand le Cost Index passe de 0 à 500 kg/min.", False),
+    ("fig_ci_temps.svg", None, "Vitesses optimales",
+     "Ce que le Cost Index achète",
+     "temps et carburant du vol EK215 selon le CI",
+     "Temps de croisière (a) et carburant (b) du vol EK215 en fonction du Cost "
+     "Index. Le CI ne modifie pas la trajectoire : il déplace le Mach "
+     "économique, qui fixe à son tour le temps de vol et la consommation. Le "
+     "repère situe la valeur retenue pour l'étude — au-delà, chaque minute "
+     "gagnée se paie de plus en plus cher.", False),
     ("fig_trim_analyse.svg", 11, "Équilibrage", "Paramètres d'équilibre",
      "α, δstab, F_N et W_F selon le Mach",
      "Paramètres d'équilibre à 500 t en fonction du Mach, pour trois niveaux "
@@ -2920,8 +2928,11 @@ def _pr_fig(nom, acc, legende=True, grille=False):
     if e is None:
         return
     fichier, num, _partie, titre, sub, cap, _large = e
+    # num=None : figure produite pour la soutenance, pas (encore) dans le
+    # rapport — pas de numéro à afficher, qui serait une fausse référence.
+    repere = f"Fig. {num}" if num else "Complément"
     with st.container(border=True):
-        _pr_cardhead(titre, sub, f"Fig. {num}", acc)
+        _pr_cardhead(titre, sub, repere, acc)
         src = _fig_src(fichier)
         if src is None:
             st.warning(f"Figure absente : `rapport/figures/{fichier}` — "
@@ -2932,7 +2943,7 @@ def _pr_fig(nom, acc, legende=True, grille=False):
         st.markdown(f'<div class="{cls}"><img src="{src}" alt="{titre}"></div>',
                     unsafe_allow_html=True)
         if legende:
-            st.markdown(f'<p class="pr-cap"><b>Fig. {num}</b> — {cap}</p>',
+            st.markdown(f'<p class="pr-cap"><b>{repere}</b> — {cap}</p>',
                         unsafe_allow_html=True)
 
 
@@ -3189,8 +3200,8 @@ def _pr_vitesses(acc_d, acc_v, v):
                  "L/D"], lignes, acc=acc_d, hl=2)
 
     _pr_figs(["fig_sr_optima.svg", "fig_cout_ci.svg"], acc_d)
-    _pr_figs(["fig_sr_masses.svg", "fig_sr_altitudes.svg", "fig_econ_ci.svg"],
-             acc_d)
+    _pr_figs(["fig_sr_masses.svg", "fig_sr_altitudes.svg", "fig_econ_ci.svg",
+              "fig_ci_temps.svg"], acc_d)
 
 
 def _pr_ek_vol(acc_d, acc_v, v):
