@@ -3493,9 +3493,11 @@ def _pr_vitesses(acc_d, acc_v, v):
         _pr_tbl(["Régime", "Mach", "TAS [kt]", "W_F [kg/h]", "SR [NM/kg]",
                  "L/D"], lignes, acc=acc_d, hl=2)
 
-    _pr_figs(["fig_sr_optima.svg", "fig_cout_ci.svg"], acc_d)
-    _pr_figs(["fig_sr_masses.svg", "fig_sr_altitudes.svg", "fig_econ_ci.svg",
-              "fig_ci_temps.svg"], acc_d)
+    # Le complément « ce que le CI achète » vient juste après le tableau : il
+    # justifie le Cost Index retenu avant qu'on détaille les courbes.
+    _pr_fig("fig_ci_temps.svg", acc_d)
+    _pr_figs(["fig_sr_optima.svg", "fig_cout_ci.svg", "fig_sr_masses.svg",
+              "fig_sr_altitudes.svg", "fig_econ_ci.svg"], acc_d)
 
 
 def _pr_ek_vol(acc_d, acc_v, v):
