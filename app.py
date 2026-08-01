@@ -2827,6 +2827,10 @@ _PRES_CSS = """
 /* le volet porte l'accent de la page pour ses color-mix */
 .st-key-rp_panel { --pracc: #3634A3; }
 .rp-sep { height: 1px; background: rgba(60,60,67,.12); margin: 16px 0 4px; }
+/* respiration entre deux sections d'une même prise de parole */
+.pr-sep { height: 1px; margin: 34px 0 30px;
+    background: linear-gradient(90deg, rgba(60,60,67,.16), rgba(60,60,67,.04) 62%,
+                transparent); }
 .rp-lbl { font-size: 10.5px; font-weight: 700; letter-spacing: .1em;
     text-transform: uppercase; color: #8B93A1; margin: 14px 0 6px; }
 /* Figure : l'image remplit toute la largeur de sa carte (les figures du
@@ -2869,20 +2873,6 @@ _PRES_CSS = """
 .pr-step p { font-size:12px; color:#6E6E73; line-height:1.5; margin:0; }
 .pr-step .bar { position:absolute; left:16px; right:16px; top:0; height:3px;
     border-radius:0 0 3px 3px; background:var(--acc); opacity:.85; }
-/* Cartes « nos choix » */
-.pr-choices { display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }
-.pr-choice { background:rgba(255,255,255,.72);
-    -webkit-backdrop-filter:blur(24px) saturate(180%);
-    backdrop-filter:blur(24px) saturate(180%);
-    border:.5px solid rgba(255,255,255,.75); border-radius:16px;
-    box-shadow:0 1px 2px rgba(16,24,40,.04), 0 10px 30px rgba(16,24,40,.06);
-    padding:17px 19px 16px; display:flex; flex-direction:column; gap:8px;
-    border-left:3px solid var(--acc); }
-.pr-choice .k { font-size:11px; font-weight:700; letter-spacing:.07em;
-    text-transform:uppercase; color:var(--acc); }
-.pr-choice h4 { font-size:15.5px; font-weight:650; color:#1C1C1E; margin:0;
-    letter-spacing:-.012em; }
-.pr-choice p { font-size:12.5px; color:#5B6573; line-height:1.55; margin:0; }
 /* Tableaux du rapport */
 .pr-tbl { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums;
     margin-top:2px; }
@@ -2905,8 +2895,7 @@ _PRES_CSS = """
 .pr-bul li::before { content:""; flex:0 0 auto; width:7px; height:7px;
     border-radius:50%; background:var(--acc); margin-top:7px; }
 @media (max-width:920px){
-    .pr-flow{ grid-template-columns:repeat(2,1fr);}
-    .pr-choices{ grid-template-columns:1fr;} }
+    .pr-flow{ grid-template-columns:repeat(2,1fr);} }
 </style>
 """
 
@@ -2941,57 +2930,68 @@ _TRIM_ANIM_HTML = """
   :root { --ink:#1C1C1E; --ink2:#3A3A3C; --ink3:#6E6E73; --ink4:#8E8E93;
           --hair:rgba(60,60,67,.16); --acc:__ACC__; --prop:#C2710A; }
   * { box-sizing:border-box; }
+  /* le contenu est plus court que l'iframe (hauteur fixe) : sans ça il se colle
+     en haut et laisse tout le vide en bas */
+  html, body { height:100%; }
   body { margin:0; background:transparent; color:var(--ink);
-         font-family:__UI__; -webkit-font-smoothing:antialiased; }
+         font-family:__UI__; -webkit-font-smoothing:antialiased;
+         display:flex; align-items:center; }
   /* largeur plafonnée et scène bornée en hauteur : l'iframe a une hauteur
      fixe, sans ces gardes la scène déborderait sur un grand écran (le SVG
      reste proportionnel, preserveAspectRatio le centre dans sa boîte). */
   .ta-grid { display:grid; grid-template-columns:7.2fr 4.8fr; gap:32px;
              align-items:center; padding:2px 4px 6px;
-             max-width:1250px; margin:0 auto; }
+             width:100%; max-width:1250px; margin:0 auto; }
   .ta-scene { position:relative; }
-  .ta-scene svg { width:100%; height:auto; max-height:330px; display:block;
+  .ta-scene svg { width:100%; height:auto; max-height:290px; display:block;
                   overflow:visible; }
-  .dlab { font-size:25px; font-weight:640; letter-spacing:-.01em; }
-  .dsub { font-size:19px; fill:var(--ink3); }
-  .ta-note { margin-top:8px; font-size:11px; color:var(--ink4); }
+  /* Tailles en unités du viewBox (880 de large) : le SVG est rendu autour de
+     600 px, soit un facteur ~0,68 — d'où des valeurs bien supérieures aux
+     tailles en pixels du reste. */
+  .dlab { font-size:33px; font-weight:640; letter-spacing:-.01em; }
+  .dsub { font-size:25px; fill:var(--ink3); }
+  .ta-note { margin-top:8px; font-size:11.5px; color:var(--ink4); }
+  /* les cinq sous-étapes de la boucle : c'est l'algorithme lui-même, elles se
+     lisent en même temps que la scène → même poids visuel que le panneau */
   .ta-stepper { display:flex; margin-top:16px; border-top:1px solid var(--hair); }
-  .ta-step { flex:1; padding:11px 11px 0; border-left:1px solid var(--hair);
+  .ta-step { flex:1; padding:13px 12px 0; border-left:1px solid var(--hair);
              opacity:.34; transition:opacity .3s; }
   .ta-step:first-child { border-left:0; padding-left:0; }
   .ta-step.on { opacity:1; }
   .ta-step.done { opacity:.68; }
-  .ta-step .d { width:8px; height:8px; border-radius:50%; background:var(--ink4);
-                margin-bottom:8px; transition:background .3s, box-shadow .3s; }
+  .ta-step .d { width:10px; height:10px; border-radius:50%; background:var(--ink4);
+                margin-bottom:9px; transition:background .3s, box-shadow .3s; }
   .ta-step.on .d { background:var(--acc);
-                   box-shadow:0 0 0 4px color-mix(in srgb,var(--acc) 16%,transparent); }
+                   box-shadow:0 0 0 5px color-mix(in srgb,var(--acc) 16%,transparent); }
   .ta-step.done .d { background:var(--acc); }
-  .ta-step .n { font-size:13px; font-weight:620; letter-spacing:-.01em; }
-  .ta-step .s { margin-top:3px; font-size:10.5px; color:var(--ink3); line-height:1.35; }
+  .ta-step .n { font-size:18px; font-weight:620; letter-spacing:-.01em; }
+  .ta-step .s { margin-top:3px; font-size:12.5px; color:var(--ink3); line-height:1.35; }
   .ta-panel { display:flex; flex-direction:column; }
-  .ta-it { font-size:10.5px; font-weight:600; letter-spacing:.2em;
+  .ta-it { font-size:11.5px; font-weight:600; letter-spacing:.2em;
            text-transform:uppercase; color:var(--acc); display:flex;
            align-items:baseline; gap:10px; }
-  .ta-it b { font-size:26px; font-weight:650; letter-spacing:-.02em;
+  .ta-it b { font-size:32px; font-weight:650; letter-spacing:-.02em;
              font-variant-numeric:tabular-nums; color:var(--ink); }
-  .ta-cnt { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px;
+  .ta-cnt { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;
             padding:14px 0 16px; border-bottom:1px solid var(--hair); }
-  .ta-c .k { font-size:10.5px; color:var(--ink3); margin-bottom:5px; }
-  .ta-c .v { font-family:__MONO__; font-size:20px; font-weight:600;
+  .ta-c .k { font-size:12px; color:var(--ink3); margin-bottom:5px; }
+  /* les trois compteurs sont le cœur de l'animation : cadrés sur les gros
+     chiffres des cartes KPI de la page */
+  .ta-c .v { font-family:__MONO__; font-size:26px; font-weight:600;
              letter-spacing:-.02em; font-variant-numeric:tabular-nums;
              white-space:nowrap; }
-  .ta-c .v small { font-size:11.5px; color:var(--ink3); font-weight:500;
+  .ta-c .v small { font-size:14px; color:var(--ink3); font-weight:500;
                    margin-left:3px; }
   .ta-res { padding:15px 0 4px; }
-  .ta-res .k { font-size:10.5px; color:var(--ink3); margin-bottom:9px; }
+  .ta-res .k { font-size:12px; color:var(--ink3); margin-bottom:9px; }
   .ta-badge { margin-top:14px; display:inline-flex; align-items:center; gap:8px;
-              align-self:flex-start; padding:7px 14px; border-radius:999px;
+              align-self:flex-start; padding:8px 15px; border-radius:999px;
               border:1.5px solid color-mix(in srgb,var(--acc) 45%,transparent);
-              color:var(--acc); font-size:12px; font-weight:620;
+              color:var(--acc); font-size:14px; font-weight:620;
               opacity:0; transform:translateY(6px);
               transition:opacity .45s, transform .45s; }
   .ta-badge.show { opacity:1; transform:none; }
-  .ta-badge svg { width:15px; height:15px; }
+  .ta-badge svg { width:17px; height:17px; }
 </style>
 
 <div class="ta-grid">
@@ -3043,7 +3043,11 @@ _TRIM_ANIM_HTML = """
             stroke-width="4" stroke-linecap="round" marker-end="url(#ahI)"/>
       <text class="dlab" x="458" y="404" fill="var(--ink)">W = m g₀</text>
       <text id="taAlphaLbl" class="dsub" x="760" y="292" text-anchor="middle">α = 0,00°</text>
-      <text id="taStabLbl" class="dsub" x="128" y="330" text-anchor="middle">δstab = 0,00°</text>
+      <!-- δstab remonté : le label « D » est porté par l'avion, et à
+           l'équilibre (−22,4° à l'écran) il retombe vers (118, 330), pile sur
+           l'ancienne position. À y=255 on reste aussi au-dessus de la queue,
+           qui remonte vers y≈271 en tournant. -->
+      <text id="taStabLbl" class="dsub" x="120" y="255" text-anchor="middle">δstab = 0,00°</text>
     </svg>
     <div class="ta-note">Assiette et calage amplifiés ×4 pour la lecture ·
       valeurs réelles à droite.</div>
@@ -3195,7 +3199,7 @@ def _pr_anim_trim(v, acc):
             ("__RES__", json.dumps([x["d_alpha"] for x in h])),
             ("__RESLBL__", json.dumps([_res_label(x["d_alpha"]) for x in h]))):
         html = html.replace(jeton, valeur)
-    st.iframe(html, height=470)
+    st.iframe(html, height=450)
 
 
 def _pr_cardhead(titre, sub="", badge="", acc="#3634A3"):
@@ -3324,15 +3328,6 @@ def _pr_contexte(acc_d, acc_v, v):
                     "step-climbs", tag="résultat", hl=True, acc=acc_d)
         + '</div>', unsafe_allow_html=True)
 
-    # Ouverture : la convergence du trim rejouée en direct — le cœur du modèle,
-    # plus parlant qu'un maillage statique. (La géométrie OpenVSP reste dans la
-    # galerie, partie « Modélisation ».)
-    with st.container(border=True):
-        _pr_cardhead("L'avion s'équilibre",
-                     "point fixe sur (α, δstab, F_N) — 500 t / 10 400 m / M_ECON",
-                     "Animation", acc_d)
-        _pr_anim_trim(v, acc_d)
-
 
 def _pr_demarche(acc_d, acc_v, v):
     _pr_head("Notre démarche", "Cinq temps, du module isolé à la mission",
@@ -3368,41 +3363,6 @@ def _pr_demarche(acc_d, acc_v, v):
     _pr_figs(["fig_atm.svg", "fig_polaire.svg"], acc_d)
 
 
-def _pr_choix(acc_d, acc_v, v):
-    _pr_head("Nos choix", "Quatre décisions assumées",
-             "Le modèle laisse plusieurs portes ouvertes. Voici celles que nous "
-             "avons franchies, et pourquoi.", acc_d)
-
-    choix = [
-        ("01", "Chaîne moteur en grandeurs corrigées",
-         "L'inversion du régime N₁ et le débit carburant travaillent sur les "
-         "polynômes <b>corrigés</b> (poussée × δ, retrait du lapse δ√θ). "
-         "Surtout, un seul et même débit alimente la consommation et le calcul "
-         "d'émissions : c'est cette cohérence qui place le point de croisière "
-         "dans la plage résolue de la courbe LTO."),
-        ("02", "Cost Index à 180 kg/min",
-         "EK215 est un vol premium de plus de 16 h : le temps y a une valeur "
-         "réelle. Le CI est choisi dans la plage [165, 200] et tenu identique "
-         "dans toute l'étude, ce qui fixe le Mach économique à "
-         f"<b>{v['validation']['ECON']['mach']:.3f}</b>."),
-        ("03", "La croisière seule, 13 000 km",
-         "L'énoncé ne modélise que la croisière : des ~13 400 km du grand "
-         "cercle DXB → LAX, on retire la montée (~250 km) et la descente "
-         "(~200 km). Les step-climbs sont supposés instantanés, et le pas "
-         "d'intégration est de 25 NM."),
-        ("04", "Vérifié de l'intérieur",
-         "Aucune valeur extérieure à recopier : on contrôle les propriétés que "
-         "le modèle <b>doit</b> avoir — ECON(CI = 0) ≡ MRC, LRC &gt; MRC, "
-         "CO₂ = 3,16 × carburant, ordres de grandeur du Trent 970 — et la "
-         "cohérence entre modules."),
-    ]
-    cartes = "".join(
-        f'<div class="pr-choice" style="--acc:{acc_v}"><span class="k">'
-        f'Choix {n}</span><h4>{t}</h4><p>{d}</p></div>' for n, t, d in choix)
-    st.markdown(f'<div class="pr-choices">{cartes}</div>',
-                unsafe_allow_html=True)
-
-
 def _pr_trim(acc_d, acc_v, v):
     t = v["trim_vitrine"]
     _pr_head("Équilibrage", "Le point fixe converge en cinq itérations",
@@ -3426,31 +3386,15 @@ def _pr_trim(acc_d, acc_v, v):
                     hl=True, acc=acc_d)
         + '</div>', unsafe_allow_html=True)
 
-    def _e(x):
-        """Écart de convergence : notation scientifique hors de la plage où le
-        décimal reste lisible (1 ≤ x < 100)."""
-        if x is None:
-            return "—"
-        if x == 0:
-            return "0"
-        if 1.0 <= abs(x) < 100.0:
-            return f"{x:.1f}"
-        e = int(np.floor(np.log10(abs(x))))
-        exp = str(e).replace("-", "−")
-        return f"{x / 10.0 ** e:.1f}·10<sup>{exp}</sup>"
-
+    # L'animation remplace le tableau de convergence : elle rejoue le même
+    # historique (compteurs α/δstab/F_N et escalier des résidus), en montrant
+    # ce que le tableau ne disait pas — l'avion qui se cale itération après
+    # itération. Le tableau IV reste dans le rapport.
     with st.container(border=True):
         _pr_cardhead("Convergence du trim",
                      "500 t / 10 400 m / M_ECON — critères : |Δα| &lt; 10⁻³ °, "
-                     "|ΔF_N| &lt; 10 N", "Tableau IV", acc_d)
-        lignes = [(h["it"], f"{h['alpha']:.3f}", _sg(h["dstab"], 3),
-                   f"{h['FN_kN']:.1f}", _e(h["d_alpha"]), _e(h["d_FN"]))
-                  for h in t["history"]]
-        _pr_tbl(["Itération", "α [°]", "δstab [°]", "F_N [kN]",
-                 "|Δα| [°]", "|ΔF_N| [N]"], lignes,
-                cap="L'itération 0 est l'estimé initial (α = δstab = 0, "
-                    "F_N = 40 % de la poussée maximale statique).",
-                acc=acc_d, hl=len(lignes) - 1)
+                     "|ΔF_N| &lt; 10 N", "Animation", acc_d)
+        _pr_anim_trim(v, acc_d)
 
     _pr_fig("fig_trim_analyse.svg", acc_d)
     _pr_fig("fig_cg.svg", acc_d)
@@ -3495,9 +3439,13 @@ def _pr_vitesses(acc_d, acc_v, v):
 
     # Le complément « ce que le CI achète » vient juste après le tableau : il
     # justifie le Cost Index retenu avant qu'on détaille les courbes.
+    # Enchaînement : d'où viennent les trois vitesses (SR puis coût), ce que le
+    # Cost Index achète une fois le coût posé, puis comment tout cela se déplace
+    # avec la masse et l'altitude. fig_econ_ci dit la même chose que le
+    # complément : elle reste en galerie pour les questions.
+    _pr_figs(["fig_sr_optima.svg", "fig_cout_ci.svg"], acc_d)
     _pr_fig("fig_ci_temps.svg", acc_d)
-    _pr_figs(["fig_sr_optima.svg", "fig_cout_ci.svg", "fig_sr_masses.svg",
-              "fig_sr_altitudes.svg", "fig_econ_ci.svg"], acc_d)
+    _pr_figs(["fig_sr_masses.svg", "fig_sr_altitudes.svg"], acc_d)
 
 
 def _pr_ek_vol(acc_d, acc_v, v):
@@ -3595,6 +3543,63 @@ def _pr_ek_res(acc_d, acc_v, v):
     _pr_figs(["fig_thrust_altitude.svg", "fig_ek_moteur.svg"], acc_d)
 
 
+def _pr_sensibilites(acc_d, acc_v, v):
+    _pr_head("Sensibilités", "Ce que le gain doit au hasard, et ce qu'il doit aux choix",
+             "On fait varier un paramètre à la fois autour du point d'étude. Le "
+             "carburant absolu bouge beaucoup ; ce qui compte est l'écart entre "
+             "stratégies — et il se comporte très différemment selon qu'on subit "
+             "le paramètre ou qu'on le choisit.", acc_d)
+
+    def _gain(bloc, i):
+        """Gain du profil à deux montées vs vol direct, au point i du balayage."""
+        d0, d2 = v[bloc]["0"][i], v[bloc]["2"][i]
+        return (d0 - d2) / d0 * 100.0
+
+    w, dis = v["ek_vs_wind"], v["ek_vs_disa"]
+    dh, base = v["ek_vs_dh"], v["ek_vs_base"]
+    iw0, iwp, iwm = (w["wind_kt"].index(x) for x in (0.0, 50.0, -50.0))
+    id0, idp = (dis["disa"].index(x) for x in (0.0, 10.0))
+    ibest = min(range(len(dh["step_ft"])), key=lambda i: dh["2"][i])
+
+    dw_p = (w["0"][iwp] - w["0"][iw0]) / w["0"][iw0] * 100.0
+    dw_m = (w["0"][iwm] - w["0"][iw0]) / w["0"][iw0] * 100.0
+    dd = (dis["0"][idp] - dis["0"][id0]) / dis["0"][id0] * 100.0
+
+    # Indicateurs et figures dans le même ordre : d'abord ce que l'on CHOISIT
+    # (palier de départ, amplitude), ensuite ce que l'on SUBIT (température,
+    # vent) — c'est aussi l'ordre des figures 17 à 21 du rapport.
+    st.markdown(
+        '<div class="dash-kpi-grid" style="grid-template-columns:repeat(4,1fr)">'
+        + _dash_kpi("Palier initial",
+                    f"FL{base['fl'][0]}→{base['fl'][-1]}", "",
+                    f"gain 2 SC : {_gain('ek_vs_base', 0):.1f} → "
+                    f"{_gain('ek_vs_base', -1):.1f} % — s'érode en montant",
+                    tag="choisi", acc=acc_d)
+        + _dash_kpi("Δh optimal", f"{dh['step_ft'][ibest]:,}".replace(",", " "),
+                    "ft", f"porte le gain à {_gain('ek_vs_dh', ibest):.1f} %",
+                    tag="choisi", hl=True, acc=acc_d)
+        + _dash_kpi("ΔISA +10 °C", _sg(dd), "%",
+                    f"gain 2 SC : {_gain('ek_vs_disa', idp):.2f} % — identique",
+                    tag="subi", acc=acc_d)
+        + _dash_kpi("Vent ±50 kt", f"{_sg(dw_m)} / {_sg(dw_p)}", "%",
+                    f"gain 2 SC : {_gain('ek_vs_wind', iwm):.2f} → "
+                    f"{_gain('ek_vs_wind', iwp):.2f} % — inchangé",
+                    tag="subi", acc=acc_d)
+        + '</div>', unsafe_allow_html=True)
+
+    st.markdown(
+        f'<ul class="pr-bul" style="--acc:{acc_v}">'
+        "<li>Ce que l'on <b>choisit</b> — Mach, palier de départ, amplitude des "
+        "montées — décide de l'ampleur du gain. Partir déjà haut ne laisse "
+        "presque plus rien à gagner.</li>"
+        "<li>Ce que l'on <b>subit</b> — température, vent — change fortement la "
+        "consommation, mais laisse le gain des step-climbs pratiquement intact : "
+        "la stratégie de paliers est robuste.</li></ul>", unsafe_allow_html=True)
+
+    _pr_figs(["fig_ek_mach.svg", "fig_ek_base.svg", "fig_ek_dh.svg",
+              "fig_ek_disa.svg", "fig_ek_wind.svg"], acc_d)
+
+
 def _pr_bilan(acc_d, acc_v, v):
     ek = v["ek215"]
     e0, e2 = ek["0"]["emissions_kg"], ek["2"]["emissions_kg"]
@@ -3654,14 +3659,42 @@ def _pr_bilan(acc_d, acc_v, v):
                 unsafe_allow_html=True)
 
 
+def _pr_sep():
+    """Filet de séparation entre deux sections d'une même prise de parole."""
+    st.markdown('<div class="pr-sep"></div>', unsafe_allow_html=True)
+
+
+# Le fil est découpé en TROIS prises de parole (une par membre de l'équipe,
+# choix d'équipe du 2026-07-31) ; chaque prise enchaîne les sections détaillées,
+# séparées par un filet.
+
+def _pr_bloc1(acc_d, acc_v, v):
+    _pr_contexte(acc_d, acc_v, v)
+    _pr_sep()
+    _pr_demarche(acc_d, acc_v, v)
+    _pr_sep()
+    _pr_trim(acc_d, acc_v, v)
+
+
+def _pr_bloc2(acc_d, acc_v, v):
+    _pr_vitesses(acc_d, acc_v, v)
+    _pr_sep()
+    _pr_ek_vol(acc_d, acc_v, v)
+    _pr_sep()
+    _pr_ek_res(acc_d, acc_v, v)
+
+
+def _pr_bloc3(acc_d, acc_v, v):
+    _pr_sensibilites(acc_d, acc_v, v)
+    _pr_sep()
+    _pr_bilan(acc_d, acc_v, v)
+
+
 # Étapes du fil de soutenance (libellés de la barre de navigation)
-PR_ETAPES = ["Contexte", "Démarche", "Nos choix", "Équilibrage",
-             "Vitesses optimales", "EK215 · le vol", "EK215 · résultats",
+PR_ETAPES = ["Contexte & équilibrage", "Vitesses & trajectoire",
              "Émissions & bilan"]
 
-_PR_FIL = dict(zip(PR_ETAPES, [_pr_contexte, _pr_demarche, _pr_choix, _pr_trim,
-                               _pr_vitesses, _pr_ek_vol, _pr_ek_res,
-                               _pr_bilan]))
+_PR_FIL = dict(zip(PR_ETAPES, [_pr_bloc1, _pr_bloc2, _pr_bloc3]))
 
 
 def _pr_galerie(acc_d, acc_v, v, partie):
@@ -3771,8 +3804,12 @@ def _pr_volet(acc, actif=True):
         if not actif:
             mode = "Fil"
         elif mode == "Fil":
-            st.markdown('<div class="rp-lbl">Étapes</div>',
+            st.markdown('<div class="rp-lbl">Prises de parole</div>',
                         unsafe_allow_html=True)
+            # une session ouverte avant un remaniement du fil garde l'ancien
+            # libellé en mémoire : le radio planterait sur une valeur inconnue
+            if st.session_state.get("pr_etape") not in PR_ETAPES:
+                st.session_state["pr_etape"] = PR_ETAPES[0]
             etape = st.radio(
                 "Étape", PR_ETAPES, key="pr_etape",
                 format_func=lambda e: f"{PR_ETAPES.index(e) + 1} · {e}",
