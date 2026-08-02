@@ -1330,6 +1330,30 @@ def extra_revue(model):
     }
 
 
+def extra_anim(model):
+    """Profils EK215 échantillonnés pour l'animation « course des deux
+    profils » de l'app (page Présentation) : distance, altitude et carburant
+    cumulé à chaque pas d'intégration, pour les trois stratégies. Le CO2 s'en
+    déduit exactement (EI constant 3,16 kg/kg) — pas besoin de le stocker."""
+    print("extra_anim …  (profils EK215 pour l'animation)")
+    cas = mod_traj.compare_step_climbs(MASS_STUDY, DIST_EK, MACH_EK, BASE_EK,
+                                       model=model)
+    out = {}
+    for k in (0, 1, 2):
+        c = cas[k]
+        if not c["feasible"]:
+            continue
+        prof = c["result"]["profile"]
+        out[str(k)] = {
+            "s_km":   [round(p["s"] / 1000.0) for p in prof],
+            "fl":     [round(p["alt"] / FT / 100.0) for p in prof],
+            "fuel_t": [round((MASS_STUDY - p["mass"]) / 1000.0, 2)
+                       for p in prof],
+            "time_h": c["time"] / 3600.0,
+        }
+    VALS["ek_anim"] = out
+
+
 def main():
     print("Construction du modèle aérodynamique …")
     model = mod_aero.build_aero_model()
@@ -1355,6 +1379,7 @@ def main():
     fig_ek_emissions_sweeps(model)
     extra_values(model)
     extra_revue(model)
+    extra_anim(model)
     with open(os.path.join(OUT, "valeurs.json"), "w") as f:
         json.dump(VALS, f, indent=2, ensure_ascii=False)
     print("  → valeurs.json")

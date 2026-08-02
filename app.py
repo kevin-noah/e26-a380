@@ -2714,7 +2714,7 @@ FIGURES = [
      "déplacement du Mach ECON",
      "Déplacement du Mach ECON le long de la courbe SR(M) (500 t / 10 400 m) "
      "quand le Cost Index passe de 0 à 500 kg/min.", False),
-    ("fig_ci_temps.svg", None, "Vitesses optimales",
+    ("fig_ci_temps.svg", 11, "Vitesses optimales",
      "Ce que le Cost Index achète",
      "temps et carburant du vol EK215 selon le CI",
      "Temps de croisière (a) et carburant (b) du vol EK215 en fonction du Cost "
@@ -2722,72 +2722,72 @@ FIGURES = [
      "économique, qui fixe à son tour le temps de vol et la consommation. Le "
      "repère situe la valeur retenue pour l'étude — au-delà, chaque minute "
      "gagnée se paie de plus en plus cher.", False),
-    ("fig_trim_analyse.svg", 11, "Équilibrage", "Paramètres d'équilibre",
+    ("fig_trim_analyse.svg", 12, "Équilibrage", "Paramètres d'équilibre",
      "α, δstab, F_N et W_F selon le Mach",
      "Paramètres d'équilibre à 500 t en fonction du Mach, pour trois niveaux "
      "de vol : incidence, calage du stabilisateur, poussée totale et débit "
      "carburant.", True),
-    ("fig_cg.svg", 12, "Équilibrage", "Influence du centrage",
+    ("fig_cg.svg", 13, "Équilibrage", "Influence du centrage",
      "CG de 30 à 45 % de la MAC",
      "Effet de la position du centre de gravité sur l'équilibre "
      "(500 t / 10 400 m / M_ECON) : calage du stabilisateur (haut) et débit "
      "carburant d'équilibre (bas).", False),
-    ("fig_ek_route.svg", 13, "Vol EK215", "Itinéraire DXB → LAX",
+    ("fig_ek_route.svg", 14, "Vol EK215", "Itinéraire DXB → LAX",
      "arc de grand cercle",
      "Itinéraire du vol EK215, Dubaï (DXB) → Los Angeles (LAX) — arc de grand "
      "cercle et contours géographiques des deux agglomérations (données "
      "OpenStreetMap simplifiées).", False),
-    ("fig_ek215.svg", 14, "Vol EK215", "Zéro, un et deux step-climbs",
+    ("fig_ek215.svg", 15, "Vol EK215", "Zéro, un et deux step-climbs",
      "profil, masse, carburant, bilan",
      "Vol EK215 (croisière de 13 000 km, 500 t, M_ECON = 0,748) volé sans, avec "
      "un et avec deux step-climbs : (a) profil vertical ; (b) évolution de la "
      "masse ; (c) carburant cumulé ; (d) consommation totale et écart relatif "
      "au vol direct.", True),
-    ("fig_thrust_altitude.svg", 15, "Vol EK215", "Poussée requise",
+    ("fig_thrust_altitude.svg", 16, "Vol EK215", "Poussée requise",
      "F_N en palier selon l'altitude",
      "Poussée requise en palier (quatre moteurs) en fonction de l'altitude au "
      "Mach économique, pour les trois masses du scénario à deux montées. Les "
      "cercles marquent l'altitude optimale : elle monte à mesure que l'avion "
      "s'allège — c'est le mécanisme même du step-climb.", False),
-    ("fig_ek_moteur.svg", 16, "Vol EK215", "Régime moteur et débit",
+    ("fig_ek_moteur.svg", 17, "Vol EK215", "Régime moteur et débit",
      "N₁ et W_F le long du vol",
      "Régime moteur N₁ (haut) et débit carburant total (bas) le long du vol "
      "EK215, pour les trois stratégies de paliers.", False),
-    ("fig_ek_mach.svg", 17, "Sensibilités", "Sensibilité au Mach",
+    ("fig_ek_mach.svg", 18, "Sensibilités", "Sensibilité au Mach",
      "carburant selon le Mach de croisière",
      "Carburant total du vol EK215 en fonction du Mach de croisière, pour les "
      "trois stratégies de paliers.", False),
-    ("fig_ek_base.svg", 18, "Sensibilités", "Choix du palier initial",
+    ("fig_ek_base.svg", 19, "Sensibilités", "Choix du palier initial",
      "carburant selon le palier de départ",
      "Carburant total du vol EK215 en fonction du palier initial de croisière "
      "(échelle verticale resserrée : l'axe ne part pas de zéro).", False),
-    ("fig_ek_dh.svg", 19, "Sensibilités", "Amplitude des step-climbs",
+    ("fig_ek_dh.svg", 20, "Sensibilités", "Amplitude des step-climbs",
      "carburant selon Δh",
      "Carburant total du vol EK215 en fonction de l'amplitude Δh d'un "
      "step-climb (échelle verticale resserrée ; repère : 2 000 ft, séparation "
      "RVSM).", False),
-    ("fig_ek_disa.svg", 20, "Sensibilités", "Sensibilité à la température",
+    ("fig_ek_disa.svg", 21, "Sensibilités", "Sensibilité à la température",
      "carburant selon ΔISA",
      "Carburant total du vol EK215 en fonction de l'écart de température ΔISA "
      "(échelle verticale resserrée).", False),
-    ("fig_ek_wind.svg", 21, "Sensibilités", "Influence du vent",
+    ("fig_ek_wind.svg", 22, "Sensibilités", "Influence du vent",
      "carburant selon un vent longitudinal",
      "Carburant total du vol EK215 en fonction d'un vent longitudinal constant "
      "(V_W > 0 : vent arrière). Le gain des step-climbs reste stable quel que "
      "soit le vent.", False),
-    ("fig_ek_emissions.svg", 22, "Émissions", "Écart au vol direct",
+    ("fig_ek_emissions.svg", 23, "Émissions", "Écart au vol direct",
      "carburant et quatre polluants",
      "Écart relatif au vol direct du carburant et des quatre polluants, pour un "
      "et deux step-climbs (vol EK215).", False),
-    ("fig_ek_emis_mach.svg", 23, "Émissions", "Polluants selon le Mach",
+    ("fig_ek_emis_mach.svg", 24, "Émissions", "Polluants selon le Mach",
      "NOx, CO, UHC et CO₂",
      "Masses de polluants du vol EK215 en fonction du Mach de croisière, pour "
      "les trois stratégies de paliers (repère : M_ECON).", False),
-    ("fig_ek_emis_base.svg", 24, "Émissions", "Polluants selon le palier",
+    ("fig_ek_emis_base.svg", 25, "Émissions", "Polluants selon le palier",
      "NOx, CO, UHC et CO₂",
      "Masses de polluants du vol EK215 en fonction du palier initial, pour les "
      "trois stratégies de paliers (repère : FL341).", False),
-    ("fig_ek_emis_alt.svg", 25, "Émissions", "Polluants selon l'altitude",
+    ("fig_ek_emis_alt.svg", 26, "Émissions", "Polluants selon l'altitude",
      "large plage d'altitude de croisière",
      "Masses de polluants du vol EK215 sur une large plage d'altitude de "
      "croisière (au Mach économique), pour les trois stratégies de paliers.",
@@ -2873,6 +2873,25 @@ _PRES_CSS = """
 .pr-step p { font-size:12px; color:#6E6E73; line-height:1.5; margin:0; }
 .pr-step .bar { position:absolute; left:16px; right:16px; top:0; height:3px;
     border-radius:0 0 3px 3px; background:var(--acc); opacity:.85; }
+/* Cartes de limites (2×2) et encart d'ouverture */
+.pr-lims { display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }
+.pr-lim { background:rgba(255,255,255,.72);
+    -webkit-backdrop-filter:blur(24px) saturate(180%);
+    backdrop-filter:blur(24px) saturate(180%);
+    border:.5px solid rgba(255,255,255,.75); border-radius:16px;
+    box-shadow:0 1px 2px rgba(16,24,40,.04), 0 10px 30px rgba(16,24,40,.06);
+    padding:16px 18px 15px; display:flex; flex-direction:column; gap:7px;
+    border-left:3px solid var(--acc); }
+.pr-lim h4 { font-size:14.5px; font-weight:650; color:#1C1C1E; margin:0;
+    letter-spacing:-.012em; }
+.pr-lim p { font-size:12.5px; color:#5B6573; line-height:1.55; margin:0; }
+.pr-ouv { margin-top:20px; padding:15px 18px 14px; border-radius:14px;
+    background:color-mix(in srgb, var(--acc) 7%, transparent);
+    border-left:3px solid var(--acc); }
+.pr-ouv .k { font-size:10.5px; font-weight:700; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--acc); }
+.pr-ouv p { font-size:13px; color:#3A3A3C; line-height:1.6; margin:6px 0 0;
+    max-width:82ch; }
 /* Tableaux du rapport */
 .pr-tbl { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums;
     margin-top:2px; }
@@ -3202,6 +3221,247 @@ def _pr_anim_trim(v, acc):
     st.iframe(html, height=450)
 
 
+# ---------------------------------------------------------------------------
+# Animation « course des deux profils » — le vol direct et le vol à deux
+# step-climbs rejoués côte à côte sur les profils RÉELLEMENT intégrés
+# (valeurs.json : ek_anim, un point par pas de 25 NM). Les compteurs carburant
+# sont interpolés sur ces échantillons ; le CO2 s'en déduit exactement
+# (EI constant 3,16 kg/kg). Même contrainte que l'animation du trim : iframe
+# obligatoire (Streamlit retire les <script> injectés en markdown).
+# ---------------------------------------------------------------------------
+
+_COURSE_ANIM_HTML = """
+<style>
+  :root { --ink:#1C1C1E; --ink2:#3A3A3C; --ink3:#6E6E73; --ink4:#8E8E93;
+          --hair:rgba(60,60,67,.16); --acc:__ACC__; --dir:#8E8E93; }
+  * { box-sizing:border-box; }
+  html, body { height:100%; }
+  body { margin:0; background:transparent; color:var(--ink);
+         font-family:__UI__; -webkit-font-smoothing:antialiased;
+         display:flex; align-items:center; }
+  .er-grid { display:grid; grid-template-columns:7.4fr 4.6fr; gap:30px;
+             align-items:center; padding:2px 4px 6px;
+             width:100%; max-width:1250px; margin:0 auto; }
+  .er-scene svg { width:100%; height:auto; max-height:300px; display:block;
+                  overflow:visible; }
+  .er-note { margin-top:8px; font-size:11.5px; color:var(--ink4); }
+  /* tailles en unités du viewBox 880 (rendu ~0,7×) */
+  .esub { font-size:24px; fill:var(--ink3); }
+  .elab { font-size:26px; font-weight:640; }
+  .er-panel { display:flex; flex-direction:column; }
+  .er-it { font-size:11.5px; font-weight:600; letter-spacing:.2em;
+           text-transform:uppercase; color:var(--acc); display:flex;
+           align-items:baseline; gap:10px; }
+  .er-it b { font-size:30px; font-weight:650; letter-spacing:-.02em;
+             font-variant-numeric:tabular-nums; color:var(--ink);
+             font-family:__MONO__; }
+  .er-it small { font-size:13px; color:var(--ink3); font-weight:500; }
+  .er-head { display:grid; grid-template-columns:1fr 92px 92px; gap:10px;
+             padding:14px 0 6px; font-size:11px; color:var(--ink3);
+             text-align:right; }
+  .er-row { display:grid; grid-template-columns:1fr 92px 92px; gap:10px;
+            align-items:baseline; padding:9px 0;
+            border-top:1px solid var(--hair); }
+  .er-row .nm { font-size:13.5px; font-weight:600; color:var(--ink2);
+                display:flex; align-items:center; gap:8px; }
+  .er-row .nm i { width:9px; height:9px; border-radius:50%; display:inline-block;
+                  background:var(--c); flex:0 0 auto; }
+  .er-row .vv { font-family:__MONO__; font-size:19px; font-weight:600;
+                text-align:right; font-variant-numeric:tabular-nums;
+                white-space:nowrap; }
+  .er-row .vv small { font-size:11px; color:var(--ink3); font-weight:500; }
+  .er-save { margin-top:14px; padding:13px 16px; border-radius:14px;
+             background:color-mix(in srgb, var(--acc) 8%, transparent);
+             border-left:3px solid var(--acc); }
+  .er-save .k { font-size:10.5px; font-weight:700; letter-spacing:.1em;
+                text-transform:uppercase; color:var(--acc); }
+  .er-save .row { display:flex; gap:22px; margin-top:6px; }
+  .er-save .v { font-family:__MONO__; font-size:24px; font-weight:600;
+                font-variant-numeric:tabular-nums; color:var(--ink);
+                white-space:nowrap; }
+  .er-save .v small { font-size:12px; color:var(--ink3); font-weight:500; }
+  .er-badge { margin-top:13px; display:inline-flex; align-items:center; gap:8px;
+              align-self:flex-start; padding:8px 15px; border-radius:999px;
+              border:1.5px solid color-mix(in srgb,var(--acc) 45%,transparent);
+              color:var(--acc); font-size:13.5px; font-weight:620;
+              opacity:0; transform:translateY(6px);
+              transition:opacity .45s, transform .45s; }
+  .er-badge.show { opacity:1; transform:none; }
+</style>
+
+<div class="er-grid">
+  <div class="er-scene">
+    <svg id="erSvg" viewBox="0 0 880 340" role="img"
+         aria-label="Vol direct et vol à deux step-climbs, côte à côte"></svg>
+    <div class="er-note">Profils intégrés par le module trajectoire (pas de
+      25 NM) · même Mach, même masse — seul le profil vertical change ·
+      CO₂ = 3,16 × carburant.</div>
+  </div>
+  <div class="er-panel">
+    <div class="er-it">Distance <b id="erS">0</b><small>/ __DIST__ km</small></div>
+    <div class="er-head"><span></span><span>carburant</span><span>CO₂</span></div>
+    <div class="er-row" style="--c:var(--dir)">
+      <span class="nm"><i></i>Direct FL__FL0__</span>
+      <span class="vv" id="erF0">0<small> t</small></span>
+      <span class="vv" id="erC0">0<small> t</small></span>
+    </div>
+    <div class="er-row" style="--c:var(--acc)">
+      <span class="nm"><i></i>2 step-climbs</span>
+      <span class="vv" id="erF2">0<small> t</small></span>
+      <span class="vv" id="erC2">0<small> t</small></span>
+    </div>
+    <div class="er-save">
+      <span class="k">Économisé en volant plus haut</span>
+      <div class="row">
+        <span class="v" id="erDF">0,00<small> t carburant</small></span>
+        <span class="v" id="erDC">0,0<small> t CO₂</small></span>
+      </div>
+    </div>
+    <div class="er-badge" id="erBadge">__BADGE__</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const D = __DATA__;
+  const svg = document.getElementById('erSvg');
+  if (!svg) return;
+  const NS = 'http://www.w3.org/2000/svg';
+  const n0 = D.f0.length, n2 = D.f2.length, dist = D.dist;
+
+  // échelles de la scène
+  const X0 = 66, X1 = 856, Y0 = 268, Y1 = 46;
+  const flLo = D.fl0 - 7, flHi = Math.max(...D.fl2) + 9;
+  const sx = (s) => X0 + (X1 - X0) * s / dist;
+  const fy = (fl) => Y0 + (Y1 - Y0) * (fl - flLo) / (flHi - flLo);
+
+  // décor : niveaux de vol en filigrane + bornes de distance
+  const add = (tag, attrs, txt) => {
+    const el = document.createElementNS(NS, tag);
+    for (const k in attrs) el.setAttribute(k, attrs[k]);
+    if (txt !== undefined) el.textContent = txt;
+    svg.appendChild(el); return el;
+  };
+  const niveaux = [...new Set([D.fl0, ...D.fl2])];
+  for (const fl of niveaux) {
+    add('line', {x1: X0, y1: fy(fl), x2: X1, y2: fy(fl), stroke: 'var(--hair)',
+                 'stroke-width': 1.4, 'stroke-dasharray': '1 8',
+                 'stroke-linecap': 'round'});
+    add('text', {x: X0 - 10, y: fy(fl) + 8, 'text-anchor': 'end',
+                 'class': 'esub'}, 'FL' + fl);
+  }
+  add('text', {x: X0, y: 316, 'class': 'esub'}, 'DXB · 0 km');
+  add('text', {x: X1, y: 316, 'text-anchor': 'end', 'class': 'esub'},
+      'LAX · ' + dist.toLocaleString('fr-FR') + ' km');
+
+  // profils : direct (gris, plein) et 2 SC (accent, tracé progressif)
+  add('line', {x1: sx(0), y1: fy(D.fl0), x2: sx(dist), y2: fy(D.fl0),
+               stroke: 'var(--dir)', 'stroke-width': 3, 'stroke-linecap': 'round',
+               opacity: .75});
+  // grille de distance implicite : le point i est à i/(n−1) de la distance
+  let d2 = 'M' + sx(0) + ',' + fy(D.fl2[0]);
+  for (let i = 1; i < n2; i++)
+    d2 += 'L' + sx(i / (n2 - 1) * dist) + ',' + fy(D.fl2[i]);
+  const trace = add('path', {d: d2, fill: 'none', stroke: 'var(--acc)',
+                             'stroke-width': 4, 'stroke-linecap': 'round'});
+  const L = trace.getTotalLength();
+  trace.setAttribute('stroke-dasharray', L);
+
+  // étiquettes de montée (apparaissent au passage)
+  const climbLbls = D.climbs.map((c) =>
+    add('text', {x: sx(c.s) + 10, y: fy(c.fl) + 30, 'class': 'elab',
+                 fill: 'var(--acc)', opacity: 0}, '↗ FL' + c.fl));
+
+  // avions (silhouette de profil, nez à droite)
+  const PLANE = 'M-26.6,-8.9 L-24.4,-8.9 L-22.1,-8.1 L-15.4,-2.6 L-11.4,-0.6 L-0.9,-1.4 L0.0,-0.8 L0.1,0.6 L25.4,0.9 L27.9,1.9 L29.9,3.4 L34.1,4.6 L36.0,6.0 L35.1,6.9 L24.9,7.1 L10.4,8.9 L5.9,8.9 L-7.9,6.9 L-22.4,2.1 L-22.8,0.8 L-28.6,-5.6 L-31.6,-5.9 L-36.0,-7.2 L-33.9,-7.4 L-31.6,-8.4 L-26.6,-8.9 Z';
+  const g0 = add('g', {}); const p0 = document.createElementNS(NS, 'path');
+  p0.setAttribute('d', PLANE); p0.setAttribute('fill', 'var(--dir)'); g0.appendChild(p0);
+  const g2 = add('g', {}); const p2 = document.createElementNS(NS, 'path');
+  p2.setAttribute('d', PLANE); p2.setAttribute('fill', 'var(--acc)'); g2.appendChild(p2);
+
+  const $ = (id) => document.getElementById(id);
+  const eS = $('erS'), eF0 = $('erF0'), eC0 = $('erC0'), eF2 = $('erF2'),
+        eC2 = $('erC2'), eDF = $('erDF'), eDC = $('erDC'), badge = $('erBadge');
+  const fr = (x, d) => x.toLocaleString('fr-FR',
+      {minimumFractionDigits: d, maximumFractionDigits: d});
+  const num = (el, x, d, u) => {
+    el.innerHTML = fr(x, d) + '<small> ' + u + '</small>'; };
+  const at = (arr, u) => {            // interpolation sur l'index (pas 25 NM)
+    const x = u * (arr.length - 1), i = Math.floor(x);
+    return i >= arr.length - 1 ? arr[arr.length - 1]
+                               : arr[i] + (arr[i + 1] - arr[i]) * (x - i);
+  };
+
+  function render(u, done) {
+    const s = u * dist;
+    const f0 = at(D.f0, u), f2 = at(D.f2, u), fl2 = at(D.fl2, u);
+    g0.setAttribute('transform',
+        `translate(${sx(s)} ${fy(D.fl0) - 12}) scale(0.62)`);
+    g2.setAttribute('transform',
+        `translate(${sx(s)} ${fy(fl2) - 12}) scale(0.62)`);
+    trace.setAttribute('stroke-dashoffset', L * (1 - u));
+    eS.textContent = fr(Math.round(s), 0);
+    num(eF0, f0, 1, 't'); num(eC0, f0 * 3.16, 1, 't');
+    num(eF2, f2, 1, 't'); num(eC2, f2 * 3.16, 1, 't');
+    num(eDF, f0 - f2, 2, 't carburant');
+    num(eDC, (f0 - f2) * 3.16, 1, 't CO₂');
+    climbLbls.forEach((el, i) =>
+        el.setAttribute('opacity', s >= D.climbs[i].s || done ? 1 : 0));
+    badge.classList.toggle('show', !!done);
+  }
+
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    render(1, true); return;
+  }
+  const T = 19.0, HOLD = 4.0;                    // course puis état final [s]
+  const start = performance.now();
+  (function frame(now) {
+    const t = ((now - start) / 1000) % (T + HOLD);
+    if (t < T) render(Math.min(1, t / T), false);
+    else render(1, true);
+    requestAnimationFrame(frame);
+  })(start);
+})();
+</script>
+"""
+
+
+def _pr_anim_course(v, acc):
+    """Course des deux profils EK215 (direct vs 2 step-climbs), données ek_anim."""
+    a = v.get("ek_anim", {})
+    ek = v["ek215"]
+    if "0" not in a or "2" not in a:
+        return
+    d0, d2 = a["0"], a["2"]
+    # points de montée : chaque saut d'altitude du profil à 2 step-climbs
+    climbs = [{"s": d2["s_km"][i], "fl": d2["fl"][i]}
+              for i in range(1, len(d2["fl"])) if d2["fl"][i] != d2["fl"][i - 1]]
+    # Rééchantillonnage sur une grille de distance COMMUNE : les deux profils
+    # n'ont pas le même nombre de points (joints de segments dupliqués), et
+    # une interpolation par index désalignerait les distances → écart fantôme
+    # (±0,2 t) entre deux avions pourtant au même niveau. Sur grille commune,
+    # le JS peut interpoler par index en restant exact.
+    dist = d0["s_km"][-1]
+    grille = np.linspace(0.0, dist, 261)
+    f0 = np.interp(grille, d0["s_km"], d0["fuel_t"])
+    f2 = np.interp(grille, d2["s_km"], d2["fuel_t"])
+    fl2 = np.interp(grille, d2["s_km"], d2["fl"])
+    data = {"dist": dist, "fl0": d0["fl"][0],
+            "f0": [round(x, 2) for x in f0], "f2": [round(x, 2) for x in f2],
+            "fl2": [round(x, 1) for x in fl2], "climbs": climbs}
+    badge = (f"{_sg(ek['2']['delta_fuel_pct'], 1, ' %')} de carburant · "
+             f"+{ek['2']['delta_time_min']:.1f} min — pour le même vol"
+             ).replace(".", ",")
+    html = _COURSE_ANIM_HTML
+    for jeton, valeur in (
+            ("__ACC__", acc), ("__UI__", FONT_UI), ("__MONO__", FONT_MONO),
+            ("__DIST__", f"{data['dist']:,}".replace(",", " ")),
+            ("__FL0__", str(data["fl0"])), ("__BADGE__", badge),
+            ("__DATA__", json.dumps(data))):
+        html = html.replace(jeton, valeur)
+    st.iframe(html, height=420)
+
+
 def _pr_cardhead(titre, sub="", badge="", acc="#3634A3"):
     """En-tête de carte, même patron que les pages module : titre et
     sous-titre groupés à gauche, repère du rapport à droite."""
@@ -3439,13 +3699,12 @@ def _pr_vitesses(acc_d, acc_v, v):
 
     # Le complément « ce que le CI achète » vient juste après le tableau : il
     # justifie le Cost Index retenu avant qu'on détaille les courbes.
-    # Enchaînement : d'où viennent les trois vitesses (SR puis coût), ce que le
-    # Cost Index achète une fois le coût posé, puis comment tout cela se déplace
-    # avec la masse et l'altitude. fig_econ_ci dit la même chose que le
-    # complément : elle reste en galerie pour les questions.
-    _pr_figs(["fig_sr_optima.svg", "fig_cout_ci.svg"], acc_d)
-    _pr_fig("fig_ci_temps.svg", acc_d)
-    _pr_figs(["fig_sr_masses.svg", "fig_sr_altitudes.svg"], acc_d)
+    # Enchaînement du rapport (partie IV) : d'où viennent les trois vitesses
+    # (SR puis coût), comment elles se déplacent avec la masse et l'altitude,
+    # puis ce que le Cost Index achète (fig. 11, sous-section CI). fig_econ_ci
+    # (fig. 10) dit la même chose que la fig. 11 : galerie seulement.
+    _pr_figs(["fig_sr_optima.svg", "fig_cout_ci.svg", "fig_sr_masses.svg",
+              "fig_sr_altitudes.svg", "fig_ci_temps.svg"], acc_d)
 
 
 def _pr_ek_vol(acc_d, acc_v, v):
@@ -3567,7 +3826,7 @@ def _pr_sensibilites(acc_d, acc_v, v):
 
     # Indicateurs et figures dans le même ordre : d'abord ce que l'on CHOISIT
     # (palier de départ, amplitude), ensuite ce que l'on SUBIT (température,
-    # vent) — c'est aussi l'ordre des figures 17 à 21 du rapport.
+    # vent) — c'est aussi l'ordre des figures 18 à 22 du rapport.
     st.markdown(
         '<div class="dash-kpi-grid" style="grid-template-columns:repeat(4,1fr)">'
         + _dash_kpi("Palier initial",
@@ -3600,16 +3859,31 @@ def _pr_sensibilites(acc_d, acc_v, v):
               "fig_ek_disa.svg", "fig_ek_wind.svg"], acc_d)
 
 
-def _pr_bilan(acc_d, acc_v, v):
+def _pr_emissions(acc_d, acc_v, v):
     ek = v["ek215"]
-    e0, e2 = ek["0"]["emissions_kg"], ek["2"]["emissions_kg"]
+    e0, e1, e2 = (ek[k]["emissions_kg"] for k in ("0", "1", "2"))
     ec = lambda k: (e2[k] - e0[k]) / e0[k] * 100.0
+    ei = v.get("ei_cruise", {})
 
-    _pr_head("Émissions & bilan", "Le carburant baisse, mais pas tous les rejets",
-             "Les indices d'émission sont évalués au régime moteur d'équilibre "
-             "par la méthode Boeing Fuel Flow, puis multipliés par le carburant "
-             "réellement brûlé. Ce qui suit le carburant descend ; ce qui "
-             "dépend du régime moteur, non.", acc_d)
+    lede = ("Les indices d'émission sont évalués au régime moteur d'équilibre "
+            "par la méthode Boeing Fuel Flow, puis multipliés par le carburant "
+            "réellement brûlé. Ce qui suit le carburant descend ; ce qui "
+            "dépend du régime moteur, non.")
+    if ei:
+        lede += (f" Au point de croisière, le modèle donne "
+                 f"EI<sub>NOx</sub> ≈ {ei['EI_NOx']:.0f} g/kg et "
+                 f"EI<sub>CO</sub> ≈ {ei['EI_CO']:.1f} g/kg, à un régime N₁ de "
+                 f"{ei['N1']:.0f} %.")
+    _pr_head("Émissions", "Le carburant baisse, mais pas tous les rejets",
+             lede, acc_d)
+
+    # Pièce maîtresse de la prise de parole : les deux stratégies rejouées
+    # côte à côte, l'écart qui se creuse en direct.
+    with st.container(border=True):
+        _pr_cardhead("La course des deux profils",
+                     "vol EK215 rejoué · direct contre 2 step-climbs — l'écart "
+                     "se creuse km après km", "Animation", acc_d)
+        _pr_anim_course(v, acc_d)
 
     st.markdown(
         '<div class="dash-kpi-grid" style="grid-template-columns:repeat(4,1fr)">'
@@ -3627,7 +3901,81 @@ def _pr_bilan(acc_d, acc_v, v):
                     acc=acc_d)
         + '</div>', unsafe_allow_html=True)
 
+    with st.container(border=True):
+        _pr_cardhead("Bilan des rejets",
+                     "vol EK215 · 13 000 km · masses cumulées sur la croisière",
+                     "Tableau", acc_d)
+        pol = [("Carburant [t]", ek["0"]["fuel_t"], ek["1"]["fuel_t"],
+                ek["2"]["fuel_t"], 1),
+               ("CO₂ [t]", e0["CO2"] / 1000, e1["CO2"] / 1000, e2["CO2"] / 1000, 1),
+               ("NOx [kg]", e0["NOx"], e1["NOx"], e2["NOx"], 0),
+               ("CO [kg]", e0["CO"], e1["CO"], e2["CO"], 1),
+               ("UHC [kg]", e0["UHC"], e1["UHC"], e2["UHC"], 2)]
+        _pr_tbl(["", "Direct", "1 step", "2 steps", "Écart 2 steps"],
+                [(nom, f"{a:.{d}f}", f"{b:.{d}f}", f"{c:.{d}f}",
+                  _sg((c - a) / a * 100, 1, " %")) for nom, a, b, c, d in pol],
+                cap="Le CO₂ suit exactement le carburant (facteur 3,16 kg/kg) ; "
+                    "les trois autres dépendent du régime moteur, qui remonte à "
+                    "chaque montée.", acc=acc_d, hl=1)
+
     _pr_figs(["fig_ek_emissions.svg", "fig_ek_emis_base.svg"], acc_d)
+
+
+def _pr_limites(acc_d, acc_v, v):
+    _pr_head("Limites", "Ce que le modèle ne dit pas",
+             "Quatre hypothèses bornent la portée des résultats. Chacune a été "
+             "quantifiée plutôt que passée sous silence.", acc_d)
+
+    ek, sc = v["ek215"], v.get("step_cost", {})
+    ei = v.get("ei_cruise", {})
+    cg = v.get("ek_cg_migration", {})
+    gain1 = ek["0"]["fuel_t"] - ek["1"]["fuel_t"]          # gain d'une montée [t]
+
+    lims = [("Indices d'émission en croisière",
+             "La banque OACI ne documente le moteur qu'aux quatre régimes du "
+             "cycle LTO, tous au sol. Parce que le débit d'émission est "
+             "cohérent avec celui réellement brûlé, notre point de croisière "
+             "tombe au voisinage du régime d'approche — dans la zone couverte, "
+             "sans extrapolation"
+             + (f" (débit corrigé de référence ≈ {ei['WF_C_REF']:.2f} kg/s)"
+                if ei else "")
+             + ". Les tendances restent plus solides que les valeurs absolues.")]
+    if sc:
+        lims.append(
+            ("Step-climbs instantanés",
+             "Les montées sont supposées instantanées et leur surcoût n'est pas "
+             f"compté. Le bilan énergétique le situe à <b>≈ {sc['dm_kg']:.0f} kg "
+             "par montée</b> à la masse de mi-vol — soit moins d'un dixième du "
+             f"gain qu'elle rapporte ({gain1:.1f} t). Les gains annoncés sont "
+             "donc très légèrement majorés, sans que les conclusions changent."))
+    lims.append(
+        ("Vent constant",
+         "Le vent est longitudinal et uniforme : ni gradient en altitude, ni "
+         "variation le long de la route. Les vitesses optimales restent des "
+         "optima « air calme » — un vent de face déplacerait l'ECON vers les "
+         "Mach élevés, un vent arrière vers les Mach faibles."))
+    dcg = max(abs(cg["0"]["avant_36"]["delta_pct"]),
+              abs(cg["0"]["arriere_44"]["delta_pct"])) if cg else None
+    lims.append(
+        ("Centrage figé",
+         "Le centre de gravité est tenu à 40 % de la corde moyenne. La "
+         "sensibilité a été quantifiée"
+         + (f" (<b>±{dcg:.1f} % de carburant</b> pour ±4 points de corde)"
+            if dcg else "")
+         + ", mais la logistique réelle des transferts entre réservoirs, qui "
+           "pilote le centrage instantané, n'est pas modélisée."))
+
+    cartes = "".join(f'<div class="pr-lim" style="--acc:{acc_v}">'
+                     f'<h4>{t}</h4><p>{d}</p></div>' for t, d in lims)
+    st.markdown(f'<div class="pr-lims">{cartes}</div>', unsafe_allow_html=True)
+
+
+def _pr_bilan(acc_d, acc_v, v):
+    ek = v["ek215"]
+    e0, e2 = ek["0"]["emissions_kg"], ek["2"]["emissions_kg"]
+    _pr_head("Bilan", "Ce que cette étude établit",
+             "Cinq conclusions, et ce qu'il faudrait pour aller plus loin.",
+             acc_d)
 
     lit = v.get("ek_litterature", {})
     points = [
@@ -3658,6 +4006,15 @@ def _pr_bilan(acc_d, acc_v, v):
                 + "".join(f"<li>{p}</li>" for p in points) + "</ul>",
                 unsafe_allow_html=True)
 
+    st.markdown(
+        f'<div class="pr-ouv" style="--acc:{acc_v}">'
+        '<span class="k">Pour aller plus loin</span>'
+        "<p>Trois prolongements se dessinent : réoptimiser le Mach en présence "
+        "de vent — les optima actuels sont des optima « air calme » ; étendre "
+        "le modèle à la montée et à la descente pour un bilan de vol complet ; "
+        "et faire migrer le centrage avec la consommation réelle plutôt que de "
+        "le figer.</p></div>", unsafe_allow_html=True)
+
 
 def _pr_sep():
     """Filet de séparation entre deux sections d'une même prise de parole."""
@@ -3687,12 +4044,16 @@ def _pr_bloc2(acc_d, acc_v, v):
 def _pr_bloc3(acc_d, acc_v, v):
     _pr_sensibilites(acc_d, acc_v, v)
     _pr_sep()
+    _pr_emissions(acc_d, acc_v, v)
+    _pr_sep()
+    _pr_limites(acc_d, acc_v, v)
+    _pr_sep()
     _pr_bilan(acc_d, acc_v, v)
 
 
 # Étapes du fil de soutenance (libellés de la barre de navigation)
 PR_ETAPES = ["Contexte & équilibrage", "Vitesses & trajectoire",
-             "Émissions & bilan"]
+             "Robustesse, émissions & bilan"]
 
 _PR_FIL = dict(zip(PR_ETAPES, [_pr_bloc1, _pr_bloc2, _pr_bloc3]))
 
