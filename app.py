@@ -2844,7 +2844,11 @@ _PRES_CSS = """
 /* en galerie, deux figures par ligne : plafond plus bas pour garder une vue
    d'ensemble sans défilement */
 .pr-fig.grille img { max-height:56vh; }
-.pr-cap { font-size:11.5px; color:#8B93A1; line-height:1.5; margin:8px 4px 0;
+/* ⚠ Échelle typographique calée pour une DIFFUSION SUR GRAND ÉCRAN de salle
+   (choix du 2026-08-02) : les plus petits textes — légendes, textes de cartes,
+   tableaux — ont été remontés d'un cran par rapport au confort « portable à
+   50 cm ». Ne pas les redescendre sans revoir le contexte de diffusion. */
+.pr-cap { font-size:13px; color:#8B93A1; line-height:1.5; margin:8px 4px 0;
     border-top:.5px solid rgba(60,60,67,.10); padding-top:8px; }
 .pr-cap b { color:#6E6E73; font-weight:600; }
 /* En-tête d'étape : surtitre, titre, chapô */
@@ -2852,9 +2856,14 @@ _PRES_CSS = """
     border-radius:999px; background:color-mix(in srgb, var(--acc) 12%, white);
     color:var(--acc); font-size:11.5px; font-weight:700; letter-spacing:.08em;
     text-transform:uppercase; }
-.pr-title { font-size:27px; font-weight:650; letter-spacing:-.022em;
+/* En-têtes de cartes : classes partagées avec les autres pages, remontées ici
+   seulement (_PRES_CSS n'est injecté que sur la Présentation). */
+.dash-chart-head .nm { font-size:17px; }
+.dash-chart-sub { font-size:12.5px; }
+.dash-chart-head .cur { font-size:14px; }
+.pr-title { font-size:29px; font-weight:650; letter-spacing:-.022em;
     color:#1A2230; margin:12px 0 0; line-height:1.22; }
-.pr-lede { font-size:15px; color:#5B6573; line-height:1.6; max-width:78ch;
+.pr-lede { font-size:16px; color:#5B6573; line-height:1.6; max-width:76ch;
     margin:9px 0 18px; }
 /* Frise « notre démarche » */
 .pr-flow { display:grid; grid-template-columns:repeat(5,1fr); gap:12px;
@@ -2868,9 +2877,9 @@ _PRES_CSS = """
     position:relative; }
 .pr-step .n { font-family:ui-monospace,"SF Mono",monospace; font-size:11px;
     font-weight:600; color:var(--acc); letter-spacing:.04em; }
-.pr-step h4 { font-size:14.5px; font-weight:650; color:#1C1C1E; margin:0;
+.pr-step h4 { font-size:15.5px; font-weight:650; color:#1C1C1E; margin:0;
     letter-spacing:-.01em; }
-.pr-step p { font-size:12px; color:#6E6E73; line-height:1.5; margin:0; }
+.pr-step p { font-size:13px; color:#6E6E73; line-height:1.5; margin:0; }
 .pr-step .bar { position:absolute; left:16px; right:16px; top:0; height:3px;
     border-radius:0 0 3px 3px; background:var(--acc); opacity:.85; }
 /* Cartes de limites (2×2) et encart d'ouverture */
@@ -2882,22 +2891,22 @@ _PRES_CSS = """
     box-shadow:0 1px 2px rgba(16,24,40,.04), 0 10px 30px rgba(16,24,40,.06);
     padding:16px 18px 15px; display:flex; flex-direction:column; gap:7px;
     border-left:3px solid var(--acc); }
-.pr-lim h4 { font-size:14.5px; font-weight:650; color:#1C1C1E; margin:0;
+.pr-lim h4 { font-size:15.5px; font-weight:650; color:#1C1C1E; margin:0;
     letter-spacing:-.012em; }
-.pr-lim p { font-size:12.5px; color:#5B6573; line-height:1.55; margin:0; }
+.pr-lim p { font-size:13.5px; color:#5B6573; line-height:1.55; margin:0; }
 .pr-ouv { margin-top:20px; padding:15px 18px 14px; border-radius:14px;
     background:color-mix(in srgb, var(--acc) 7%, transparent);
     border-left:3px solid var(--acc); }
 .pr-ouv .k { font-size:10.5px; font-weight:700; letter-spacing:.1em;
     text-transform:uppercase; color:var(--acc); }
-.pr-ouv p { font-size:13px; color:#3A3A3C; line-height:1.6; margin:6px 0 0;
-    max-width:82ch; }
+.pr-ouv p { font-size:14px; color:#3A3A3C; line-height:1.6; margin:6px 0 0;
+    max-width:80ch; }
 /* Tableaux du rapport */
 .pr-tbl { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums;
     margin-top:2px; }
 .pr-tbl.etroit { max-width:620px; }
-.pr-tbl th, .pr-tbl td { text-align:right; padding:9px 13px; font-size:13px; }
-.pr-tbl th { font-size:10.5px; font-weight:700; color:#8E8E93;
+.pr-tbl th, .pr-tbl td { text-align:right; padding:9px 13px; font-size:14px; }
+.pr-tbl th { font-size:11.5px; font-weight:700; color:#8E8E93;
     text-transform:uppercase; letter-spacing:.05em;
     border-bottom:1px solid rgba(60,60,67,.18); }
 .pr-tbl th:first-child, .pr-tbl td:first-child { text-align:left; }
@@ -2906,13 +2915,23 @@ _PRES_CSS = """
 .pr-tbl td:first-child { font-family:inherit; font-weight:600; color:#1C1C1E; }
 .pr-tbl tr:last-child td { border-bottom:none; }
 .pr-tbl tr.hl td { background:color-mix(in srgb, var(--acc) 8%, transparent); }
-.pr-tblcap { font-size:11.5px; color:#8B93A1; margin:9px 4px 0; }
+.pr-tblcap { font-size:13px; color:#8B93A1; margin:9px 4px 0; line-height:1.5; }
 /* Points de bilan */
 .pr-bul { display:flex; flex-direction:column; gap:11px; margin:2px 0 0; }
 .pr-bul li { list-style:none; display:flex; gap:11px; align-items:flex-start;
-    font-size:13.5px; color:#3A3A3C; line-height:1.55; }
+    font-size:14.5px; color:#3A3A3C; line-height:1.55; }
 .pr-bul li::before { content:""; flex:0 0 auto; width:7px; height:7px;
-    border-radius:50%; background:var(--acc); margin-top:7px; }
+    border-radius:50%; background:var(--acc); margin-top:8px; }
+/* Les tableaux ne poussent jamais la page en défilement horizontal : c'est leur
+   enveloppe qui défile, la table gardant son display natif (sinon l'en-tête et
+   le corps deviennent deux tables et les colonnes se désalignent). */
+.pr-tblwrap { overflow-x:auto; }
+/* Repli des grilles quand la fenêtre rétrécit (écran de secours, fenêtre
+   partagée en visio). Les grilles de KPI portent leurs colonnes en style
+   inline : il faut donc !important pour les reprendre. */
+@media (max-width:1240px){
+    .pr-lims{ grid-template-columns:1fr; }
+    .dash-kpi-grid{ grid-template-columns:repeat(2,1fr) !important; } }
 @media (max-width:920px){
     .pr-flow{ grid-template-columns:repeat(2,1fr);} }
 </style>
@@ -3523,8 +3542,9 @@ def _pr_tbl(entetes, lignes, cap="", acc="#3634A3", hl=None, etroit=False):
         tr += f"<tr{cls}>" + "".join(f"<td>{c}</td>" for c in ligne) + "</tr>"
     c = f'<p class="pr-tblcap">{cap}</p>' if cap else ""
     cls_t = "pr-tbl etroit" if etroit else "pr-tbl"
-    st.markdown(f'<table class="{cls_t}" style="--acc:{acc}"><thead><tr>{th}'
-                f'</tr></thead><tbody>{tr}</tbody></table>{c}',
+    st.markdown(f'<div class="pr-tblwrap">'
+                f'<table class="{cls_t}" style="--acc:{acc}"><thead><tr>{th}'
+                f'</tr></thead><tbody>{tr}</tbody></table></div>{c}',
                 unsafe_allow_html=True)
 
 
@@ -3573,7 +3593,9 @@ def _pr_contexte(acc_d, acc_v, v):
              "servir pour optimiser une mission longue distance réelle : le vol "
              "Emirates EK215, Dubaï → Los Angeles.", acc_d)
 
-    ek = v["ek215"]
+    # Ouverture : on pose la question, on ne donne pas la réponse. Le gain en
+    # carburant est la révélation de la prise de parole « Vitesses &
+    # trajectoire » — l'annoncer ici la lui volerait.
     st.markdown(
         '<div class="dash-kpi-grid" style="grid-template-columns:repeat(4,1fr)">'
         + _dash_kpi("Modules", "7", "", "de l'atmosphère à la trajectoire",
@@ -3582,10 +3604,9 @@ def _pr_contexte(acc_d, acc_v, v):
                     tag="point d'étude", acc=acc_d)
         + _dash_kpi("Croisière étudiée", f"{fr(13000)}", "km",
                     "Dubaï (DXB) → Los Angeles (LAX)", tag="EK215", acc=acc_d)
-        + _dash_kpi("Carburant économisé",
-                    _sg(ek['2']['delta_fuel_pct']), "%",
-                    f"{ek['0']['fuel_t'] - ek['2']['fuel_t']:.1f} t avec deux "
-                    "step-climbs", tag="résultat", hl=True, acc=acc_d)
+        + _dash_kpi("Profils comparés", "3", "",
+                    "vol direct, un et deux step-climbs", tag="la question",
+                    hl=True, acc=acc_d)
         + '</div>', unsafe_allow_html=True)
 
 
@@ -3625,11 +3646,14 @@ def _pr_demarche(acc_d, acc_v, v):
 
 def _pr_trim(acc_d, acc_v, v):
     t = v["trim_vitrine"]
+    # Le Mach est cité par sa valeur, pas par « M_ECON » : la notion de régime
+    # économique n'est introduite qu'à la prise de parole suivante.
+    m_etude = v["validation"]["ECON"]["mach"]
     _pr_head("Équilibrage", "Le point fixe converge en cinq itérations",
              "À masse, altitude et Mach donnés, l'algorithme cherche le triplet "
              "(α, δstab, F_N) qui annule simultanément portance, traînée et "
-             "moment de tangage. Point d'étude : 500 t, 10 400 m, "
-             "M_ECON.", acc_d)
+             f"moment de tangage. Point d'étude : 500 t, 10 400 m, "
+             f"M {m_etude:.3f}.", acc_d)
 
     st.markdown(
         '<div class="dash-kpi-grid" style="grid-template-columns:repeat(5,1fr)">'
@@ -3652,8 +3676,8 @@ def _pr_trim(acc_d, acc_v, v):
     # itération. Le tableau IV reste dans le rapport.
     with st.container(border=True):
         _pr_cardhead("Convergence du trim",
-                     "500 t / 10 400 m / M_ECON — critères : |Δα| &lt; 10⁻³ °, "
-                     "|ΔF_N| &lt; 10 N", "Animation", acc_d)
+                     f"500 t / 10 400 m / M {m_etude:.3f} — critères : "
+                     "|Δα| &lt; 10⁻³ °, |ΔF_N| &lt; 10 N", "Animation", acc_d)
         _pr_anim_trim(v, acc_d)
 
     _pr_fig("fig_trim_analyse.svg", acc_d)
@@ -3732,17 +3756,18 @@ def _pr_ek_vol(acc_d, acc_v, v):
         _pr_cardhead("Paramètres de la trajectoire",
                      "configuration retenue pour toute l'étude",
                      "Tableau III", acc_d)
+        # Le triplet MRC/LRC/ECON vient d'être donné au tableau II : on ne
+        # reporte ici que le Mach effectivement volé.
         val = v["validation"]
         _pr_tbl(["Paramètre", "Valeur"], [
             ("Distance de croisière", f"{fr(13000)} km"),
             ("Altitude de base", "10 400 m (FL341)"),
             ("Masse initiale", "500 000 kg"),
             ("Position du CG", "40 % MAC"),
-            ("M_MRC", f"{val['MRC']['mach']:.3f}"),
-            ("M_LRC", f"{val['LRC']['mach']:.3f}"),
-            ("M_ECON (CI = 180)", f"{val['ECON']['mach']:.3f}"),
             ("Amplitude Δh", "2 000 ft (RVSM)"),
-        ], acc=acc_d, hl=6, etroit=True)
+            ("Mach de croisière", f"{val['ECON']['mach']:.3f} — économique, "
+                                  "CI = 180 kg/min"),
+        ], acc=acc_d, hl=5, etroit=True)
 
 
 def _pr_ek_res(acc_d, acc_v, v):
@@ -3768,15 +3793,14 @@ def _pr_ek_res(acc_d, acc_v, v):
         return _dash_kpi(sl, f"{d['fuel_t']:.1f}", "t carb.", desc, tag=tag,
                          hl=hl, acc=acc_d)
 
-    co2 = (ek["0"]["emissions_kg"]["CO2"] - ek["2"]["emissions_kg"]["CO2"]) / 1000.0
+    # Cette prise de parole s'arrête au carburant et au temps : tout ce qui
+    # touche aux rejets (CO₂, NOx, CO, UHC) appartient à la prise de parole
+    # « Robustesse, émissions & bilan », pour ne pas la déflorer.
     st.markdown(
-        '<div class="dash-kpi-grid" style="grid-template-columns:repeat(4,1fr)">'
+        '<div class="dash-kpi-grid" style="grid-template-columns:repeat(3,1fr)">'
         + _kpi(0, "Direct", "sans step-climb", C_DIR)
         + _kpi(1, "1 step-climb", "FL341 → 361", acc_v)
         + _kpi(2, "2 step-climbs", "FL341 → 361 → 381", acc_d, hl=True)
-        + _dash_kpi("CO₂ évité", f"{co2:.1f}", "t",
-                    "deux step-climbs vs vol direct", tag="émissions",
-                    acc=acc_d)
         + '</div>', unsafe_allow_html=True)
 
     _pr_fig("fig_ek215.svg", acc_d)
@@ -3793,13 +3817,8 @@ def _pr_ek_res(acc_d, acc_v, v):
             ("Δ temps [min]", *[dmin(x) for x in e]),
             ("Carburant [t]", *[f"{x['fuel_t']:.1f}" for x in e]),
             ("Δ carburant", *[pct(x) for x in e]),
-            ("CO₂ [t]", *[f"{x['emissions_kg']['CO2'] / 1000:.1f}" for x in e]),
-            ("NOx [kg]", *[f"{x['emissions_kg']['NOx']:.0f}" for x in e]),
-            ("CO [kg]", *[f"{x['emissions_kg']['CO']:.1f}" for x in e]),
-            ("UHC [kg]", *[f"{x['emissions_kg']['UHC']:.2f}" for x in e]),
-        ], acc=acc_d, hl=3)
-
-    _pr_figs(["fig_thrust_altitude.svg", "fig_ek_moteur.svg"], acc_d)
+        ], cap="Le bilan des rejets correspondant est repris dans la dernière "
+               "prise de parole.", acc=acc_d, hl=3)
 
 
 def _pr_sensibilites(acc_d, acc_v, v):
@@ -3867,8 +3886,9 @@ def _pr_emissions(acc_d, acc_v, v):
 
     lede = ("Les indices d'émission sont évalués au régime moteur d'équilibre "
             "par la méthode Boeing Fuel Flow, puis multipliés par le carburant "
-            "réellement brûlé. Ce qui suit le carburant descend ; ce qui "
-            "dépend du régime moteur, non.")
+            "réellement brûlé. Ce qui est proportionnel au carburant descend "
+            "avec lui ; ce qui passe par un indice d'émission suit sa propre "
+            "logique.")
     if ei:
         lede += (f" Au point de croisière, le modèle donne "
                  f"EI<sub>NOx</sub> ≈ {ei['EI_NOx']:.0f} g/kg et "
@@ -3914,11 +3934,19 @@ def _pr_emissions(acc_d, acc_v, v):
         _pr_tbl(["", "Direct", "1 step", "2 steps", "Écart 2 steps"],
                 [(nom, f"{a:.{d}f}", f"{b:.{d}f}", f"{c:.{d}f}",
                   _sg((c - a) / a * 100, 1, " %")) for nom, a, b, c, d in pol],
-                cap="Le CO₂ suit exactement le carburant (facteur 3,16 kg/kg) ; "
-                    "les trois autres dépendent du régime moteur, qui remonte à "
-                    "chaque montée.", acc=acc_d, hl=1)
+                cap="Le CO₂ suit exactement le carburant (facteur 3,16 kg/kg). "
+                    "Les trois autres passent par leur indice d'émission, qui "
+                    "se déplace avec le point de fonctionnement : en montant, "
+                    "l'air se raréfie et le régime d'équilibre baisse un peu — "
+                    "l'indice de NOx recule, ceux de CO et d'imbrûlés "
+                    "augmentent.", acc=acc_d, hl=1)
 
-    _pr_figs(["fig_ek_emissions.svg", "fig_ek_emis_base.svg"], acc_d)
+    # Les figures 16 et 17 (poussée requise, régime moteur) viennent d'ici et
+    # non de la prise de parole précédente : c'est le régime moteur qui explique
+    # pourquoi CO et UHC ne suivent pas le carburant. Elles précèdent donc les
+    # figures d'émissions proprement dites.
+    _pr_figs(["fig_thrust_altitude.svg", "fig_ek_moteur.svg",
+              "fig_ek_emissions.svg", "fig_ek_emis_base.svg"], acc_d)
 
 
 def _pr_limites(acc_d, acc_v, v):
@@ -3987,10 +4015,10 @@ def _pr_bilan(acc_d, acc_v, v):
         f"({_sg(ek['2']['delta_fuel_pct'], 1, ' %')})</b> pour "
         f"{ek['2']['delta_time_min']:.1f} minutes de vol en plus — un compromis "
         "très favorable dès que le carburant compte.",
-        "Le gain vient d'un mécanisme simple : l'altitude optimale monte à "
-        "mesure que l'avion s'allège, et l'escalier la suit au lieu de s'en "
-        "éloigner. Il résiste au vent, à la température et au choix du palier "
-        "initial.",
+        "Ce gain n'est pas un accident de configuration : il survit au vent et "
+        "à la température, qui déplacent pourtant la consommation de plus de "
+        "dix pour cent. Seule son ampleur se pilote — par le palier de départ "
+        "et l'amplitude des montées.",
         "Les polluants ne suivent pas tous : CO₂ et NOx descendent avec le "
         "carburant, tandis que CO et UHC restent stables — ils dépendent du "
         "régime moteur, qui remonte à chaque montée.",
@@ -4009,11 +4037,11 @@ def _pr_bilan(acc_d, acc_v, v):
     st.markdown(
         f'<div class="pr-ouv" style="--acc:{acc_v}">'
         '<span class="k">Pour aller plus loin</span>'
-        "<p>Trois prolongements se dessinent : réoptimiser le Mach en présence "
-        "de vent — les optima actuels sont des optima « air calme » ; étendre "
-        "le modèle à la montée et à la descente pour un bilan de vol complet ; "
-        "et faire migrer le centrage avec la consommation réelle plutôt que de "
-        "le figer.</p></div>", unsafe_allow_html=True)
+        "<p>Trois prolongements se dessinent, un par limite : réoptimiser le "
+        "Mach dans le vent au lieu de le subir ; étendre le modèle à la montée "
+        "et à la descente pour un bilan de vol complet ; et faire migrer le "
+        "centrage avec la consommation réelle plutôt que de le figer.</p>"
+        "</div>", unsafe_allow_html=True)
 
 
 def _pr_sep():
