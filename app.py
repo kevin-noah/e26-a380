@@ -3709,6 +3709,11 @@ def _pr_vitesses(acc_d, acc_v, v):
     st.markdown('<div class="dash-kpi-grid" style="grid-template-columns:'
                 f'repeat(4,1fr)">{kpis}</div>', unsafe_allow_html=True)
 
+    # La figure du Cost Index vient AVANT le tableau (demande Kevin) : le
+    # tableau est calculé à CI = 180, on justifie donc ce choix d'abord. Elle
+    # rompt l'ordre croissant des numéros de figure, sciemment.
+    _pr_fig("fig_ci_temps.svg", acc_d)
+
     with st.container(border=True):
         _pr_cardhead("Vitesses optimales",
                      "500 t / 10 400 m / CG 40 % / CI = 180 kg/min",
@@ -3721,14 +3726,12 @@ def _pr_vitesses(acc_d, acc_v, v):
         _pr_tbl(["Régime", "Mach", "TAS [kt]", "W_F [kg/h]", "SR [NM/kg]",
                  "L/D"], lignes, acc=acc_d, hl=2)
 
-    # Le complément « ce que le CI achète » vient juste après le tableau : il
-    # justifie le Cost Index retenu avant qu'on détaille les courbes.
-    # Enchaînement du rapport (partie IV) : d'où viennent les trois vitesses
-    # (SR puis coût), comment elles se déplacent avec la masse et l'altitude,
-    # puis ce que le Cost Index achète (fig. 11, sous-section CI). fig_econ_ci
-    # (fig. 10) dit la même chose que la fig. 11 : galerie seulement.
+    # Puis l'enchaînement du rapport (partie IV) : d'où viennent les trois
+    # vitesses (SR puis coût), et comment elles se déplacent avec la masse et
+    # l'altitude. fig_econ_ci (fig. 10) dit la même chose que la fig. 11 :
+    # galerie seulement.
     _pr_figs(["fig_sr_optima.svg", "fig_cout_ci.svg", "fig_sr_masses.svg",
-              "fig_sr_altitudes.svg", "fig_ci_temps.svg"], acc_d)
+              "fig_sr_altitudes.svg"], acc_d)
 
 
 def _pr_ek_vol(acc_d, acc_v, v):
